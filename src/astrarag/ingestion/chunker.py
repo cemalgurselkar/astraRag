@@ -37,6 +37,7 @@ class FixedSizeChunker:
                             index=chunk_index,
                             page_numbers=[page.number],
                             metadata={
+                                **documents.metadata,
                                 "start_char": start,
                                 "end_char": end
                             },

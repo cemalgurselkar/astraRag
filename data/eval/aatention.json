@@ -1,0 +1,74 @@
+[
+  {
+    "id": "attention-001",
+    "query": "What is multi-head attention?",
+    "query_type": "semantic",
+    "evidence_search": "Multi-head attention allows the model"
+  },
+  {
+    "id": "attention-002",
+    "query": "What is scaled dot-product attention?",
+    "query_type": "semantic",
+    "evidence_search": "Scaled Dot-Product Attention"
+  },
+  {
+    "id": "attention-003",
+    "query": "How many attention heads are used in the Transformer?",
+    "query_type": "numerical",
+    "evidence_search": "we employ h = 8"
+  },
+  {
+    "id": "attention-004",
+    "query": "What is the dimensionality of the model embeddings?",
+    "query_type": "numerical",
+    "evidence_search": "dmodel = 512"
+  },
+  {
+    "id": "attention-005",
+    "query": "How many identical layers are used in the encoder?",
+    "query_type": "numerical",
+    "evidence_search": "stack of N = 6 identical layers"
+  },
+  {
+    "id": "attention-006",
+    "query": "Why does the Transformer use positional encodings?",
+    "query_type": "semantic",
+    "evidence_search": "Since our model contains no recurrence and no convolution"
+  },
+  {
+    "id": "attention-007",
+    "query": "What activation function is used in the position-wise feed-forward network?",
+    "query_type": "lexical",
+    "evidence_search": "ReLU"
+  },
+  {
+    "id": "attention-008",
+    "query": "What optimizer is used to train the Transformer?",
+    "query_type": "lexical",
+    "evidence_search": "Adam optimizer"
+  },
+  {
+    "id": "attention-009",
+    "query": "What dropout rate is used during training?",
+    "query_type": "numerical",
+    "evidence_search": "Pdrop = 0.1"
+  },
+  {
+    "id": "attention-010",
+    "query": "How does self-attention compare with recurrent layers in computational complexity?",
+    "query_type": "comparison",
+    "evidence_search": "Complexity per Layer"
+  },
+  {
+    "id": "attention-011",
+    "query": "What are the three ways multi-head attention is used in the Transformer?",
+    "query_type": "single_hop",
+    "evidence_search": "uses multi-head attention in three different ways"
+  },
+  {
+    "id": "attention-012",
+    "query": "Why was self-attention chosen for the Transformer architecture?",
+    "query_type": "semantic",
+    "evidence_search": "Self-attention is an attention mechanism"
+  }
+]

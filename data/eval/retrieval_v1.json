@@ -1,0 +1,251 @@
+[
+  {
+    "id": "attention-001",
+    "query": "What is scaled dot-product attention?",
+    "query_type": "semantic",
+    "evidence": [{"document": "attention.pdf", "text": "We call our particular attention \"Scaled Dot-Product Attention\""}]
+  },
+  {
+    "id": "attention-002",
+    "query": "How many identical layers are used in the Transformer encoder?",
+    "query_type": "numerical",
+    "evidence": [{"document": "attention.pdf", "text": "The encoder is composed of a stack of N = 6 identical layers"}]
+  },
+  {
+    "id": "attention-003",
+    "query": "What dimensionality does the Transformer use for its embeddings and sub-layer outputs?",
+    "query_type": "numerical",
+    "evidence": [{"document": "attention.pdf", "text": "produce outputs of dimension dmodel = 512"}]
+  },
+  {
+    "id": "attention-004",
+    "query": "Why can the Transformer be trained more parallelly than recurrent models?",
+    "query_type": "semantic",
+    "evidence": [{"document": "attention.pdf", "text": "The Transformer allows for significantly more parallelization"}]
+  },
+  {
+    "id": "attention-005",
+    "query": "Why is the dot product scaled in scaled dot-product attention?",
+    "query_type": "semantic",
+    "evidence": [{"document": "attention.pdf", "text": "the dot products grow large in magnitude"}]
+  },
+  {
+    "id": "attention-006",
+    "query": "What two sub-layers make up each Transformer encoder layer?",
+    "query_type": "single_hop",
+    "evidence": [{"document": "attention.pdf", "text": "The first is a multi-head self-attention mechanism, and the second is a simple"}]
+  },
+  {
+    "id": "attention-007",
+    "query": "What does an attention function map to an output?",
+    "query_type": "lexical",
+    "evidence": [{"document": "attention.pdf", "text": "mapping a query and a set of key-value pairs to an output"}]
+  },
+  {
+    "id": "attention-008",
+    "query": "What mechanism does the Transformer rely on instead of recurrence?",
+    "query_type": "semantic",
+    "evidence": [{"document": "attention.pdf", "text": "relying entirely on an attention mechanism"}]
+  },
+
+  {
+    "id": "bert-001",
+    "query": "What does BERT stand for?",
+    "query_type": "lexical",
+    "evidence": [{"document": "bert.pdf", "text": "Bidirectional Encoder Representations from Transformers"}]
+  },
+  {
+    "id": "bert-002",
+    "query": "How does BERT overcome the unidirectionality limitation of previous language models?",
+    "query_type": "semantic",
+    "evidence": [
+      {
+        "document": "bert.pdf",
+        "text": "using a “masked language model” (MLM) pre-training objective"
+      }
+    ]
+  },
+  {
+    "id": "bert-003",
+    "query": "What two tasks are used to pre-train BERT?",
+    "query_type": "single_hop",
+    "evidence": [{"document": "bert.pdf", "text": "In addition to the masked language model, we also use"}]
+  },
+  {
+    "id": "bert-004",
+    "query": "Why is bidirectional context important for question answering?",
+    "query_type": "semantic",
+    "evidence": [{"document": "bert.pdf", "text": "it is crucial to incorporate context from both directions"}]
+  },
+  {
+    "id": "bert-005",
+    "query": "How are BERT parameters used during fine-tuning?",
+    "query_type": "semantic",
+    "evidence": [{"document": "bert.pdf", "text": "all of the parameters are fine-tuned using labeled data"}]
+  },
+  {
+    "id": "bert-006",
+    "query": "What GLUE score does BERT report?",
+    "query_type": "numerical",
+    "evidence": [{"document": "bert.pdf", "text": "GLUE score to 80.5"}]
+  },
+  {
+    "id": "bert-007",
+    "query": "What special token is placed in front of every BERT input example?",
+    "query_type": "lexical",
+    "evidence": [{"document": "bert.pdf", "text": "[CLS] is a special"}]
+  },
+  {
+    "id": "bert-008",
+    "query": "What is the difference between feature-based and fine-tuning approaches to pre-trained language representations?",
+    "query_type": "comparison",
+    "evidence": [{"document": "bert.pdf", "text": "There are two existing strategies"}]
+  },
+
+  {
+    "id": "dpr-001",
+    "query": "What architecture does DPR use to encode questions and passages?",
+    "query_type": "semantic",
+    "evidence": [{"document": "dense.pdf", "text": "a simple dual-encoder framework"}]
+  },
+  {
+    "id": "dpr-002",
+    "query": "Why can dense retrieval handle synonyms better than term matching?",
+    "query_type": "semantic",
+    "evidence": [{"document": "dense.pdf", "text": "synonyms or paraphrases that consist of completely different tokens"}]
+  },
+  {
+    "id": "dpr-003",
+    "query": "What example does DPR use to illustrate lexical mismatch between a question and an answer passage?",
+    "query_type": "single_hop",
+    "evidence": [{"document": "dense.pdf", "text": "Who is the bad guy in lord of the rings?"}]
+  },
+  {
+    "id": "dpr-004",
+    "query": "What similarity function does DPR use between question and passage vectors?",
+    "query_type": "lexical",
+    "evidence": [{"document": "dense.pdf", "text": "using the dot product of their vectors"}]
+  },
+  {
+    "id": "dpr-005",
+    "query": "What dimensionality are DPR's BERT encoder outputs?",
+    "query_type": "numerical",
+    "evidence": [{"document": "dense.pdf", "text": "so d = 768"}]
+  },
+  {
+    "id": "dpr-006",
+    "query": "How many passages can the DPR experiments contain?",
+    "query_type": "numerical",
+    "evidence": [{"document": "dense.pdf", "text": "21 million passages"}]
+  },
+  {
+    "id": "dpr-007",
+    "query": "What kind of hard negative substantially improves DPR training?",
+    "query_type": "semantic",
+    "evidence": [{"document": "dense.pdf", "text": "adding a single BM25 negative passage improves"}]
+  },
+  {
+    "id": "dpr-008",
+    "query": "How do BM25 and DPR differ qualitatively in what they retrieve?",
+    "query_type": "comparison",
+    "evidence": [{"document": "dense.pdf", "text": "BM25 are sensitive to highly selective keywords and phrases"}]
+  },
+
+  {
+    "id": "sbert-001",
+    "query": "Why is standard BERT inefficient for large-scale semantic similarity search?",
+    "query_type": "semantic",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "requires about 50 million inference computations"}]
+  },
+  {
+    "id": "sbert-002",
+    "query": "What network structures does Sentence-BERT use?",
+    "query_type": "lexical",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "siamese and triplet network structures"}]
+  },
+  {
+    "id": "sbert-003",
+    "query": "How long does SBERT take to search a collection of 10,000 sentences compared with BERT?",
+    "query_type": "comparison",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "from 65 hours with BERT / RoBERTa to about 5 seconds"}]
+  },
+  {
+    "id": "sbert-004",
+    "query": "What similarity measure can be used with SBERT sentence embeddings?",
+    "query_type": "lexical",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "compared using cosine-similarity"}]
+  },
+  {
+    "id": "sbert-005",
+    "query": "What three pooling strategies are evaluated by SBERT?",
+    "query_type": "single_hop",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "three pooling strategies"}]
+  },
+  {
+    "id": "sbert-006",
+    "query": "What is the default pooling strategy in SBERT?",
+    "query_type": "lexical",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "The default configuration is MEAN"}]
+  },
+  {
+    "id": "sbert-007",
+    "query": "Why are semantically meaningful sentence embeddings useful for retrieval?",
+    "query_type": "semantic",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "semantically similar sentences are close in vector space"}]
+  },
+  {
+    "id": "sbert-008",
+    "query": "What operation does SBERT add to BERT to create fixed-size sentence embeddings?",
+    "query_type": "semantic",
+    "evidence": [{"document": "sentence_bert.pdf", "text": "SBERT adds a pooling operation"}]
+  },
+
+  {
+    "id": "colbert-001",
+    "query": "What interaction architecture does ColBERT introduce?",
+    "query_type": "lexical",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "ColBERT introduces a late interaction architecture"}]
+  },
+  {
+    "id": "colbert-002",
+    "query": "How does ColBERT encode queries and documents?",
+    "query_type": "semantic",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "independently encodes the query and the document using BERT"}]
+  },
+  {
+    "id": "colbert-003",
+    "query": "Why can ColBERT pre-compute document representations?",
+    "query_type": "semantic",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "ability to pre-compute document representations"}]
+  },
+  {
+    "id": "colbert-004",
+    "query": "What operation does ColBERT use for late interaction?",
+    "query_type": "lexical",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "summation of maximum similarity (MaxSim) operators"}]
+  },
+  {
+    "id": "colbert-005",
+    "query": "How does MaxSim score a query term against a document?",
+    "query_type": "semantic",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "maximum cosine similarity of each"}]
+  },
+  {
+    "id": "colbert-006",
+    "query": "Why is late interaction cheaper than feeding every query-document pair through BERT?",
+    "query_type": "semantic",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "delaying the query–document interaction"}]
+  },
+  {
+    "id": "colbert-007",
+    "query": "What benchmark is used to evaluate ColBERT's ranking effectiveness?",
+    "query_type": "lexical",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "MS MARCO"}]
+  },
+  {
+    "id": "colbert-008",
+    "query": "What advantage does end-to-end ColBERT retrieval have over only reranking BM25 results?",
+    "query_type": "comparison",
+    "evidence": [{"document": "CoIBERT.pdf", "text": "improved recall"}]
+  }
+]

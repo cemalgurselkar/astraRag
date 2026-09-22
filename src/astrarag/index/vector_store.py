@@ -108,3 +108,35 @@ class DenseVectorIndex:
                 )
             )
         return results
+
+    def get_chunks(self) -> list[Chunk]:
+        chunks: list[Chunk] = []
+        offset = None
+
+        while True:
+            points, offset = self._client.scroll(
+                collection_name=self.collection_name,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            for point in points:
+                payload = point.payload or {}
+
+                chunks.append(
+                    Chunk(
+                        id=str(payload["chunk_id"]),
+                        document_id=str(payload["document_id"]),
+                        text=str(payload["text"]),
+                        index=int(payload["index"]),
+                        page_numbers=list(payload.get("page_numbers", [])),
+                        metadata=dict(payload.get("metadata", {})),
+                    )
+                )
+
+            if offset is None:
+                break
+
+        return chunks
