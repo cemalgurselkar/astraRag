@@ -2,7 +2,7 @@ import re
 import unicodedata
 from collections.abc import Sequence
 
-from astrarag.schemas import Chunk, EvaluationQuery
+from astrarag.schemas import Chunk, EvaluationQuery, RetrievalResult
 
 
 def _normalize_text(text: str) -> str:
@@ -35,9 +35,7 @@ def resolve_relevant_chunk_ids(
         ]
 
         if not document_chunks:
-            raise ValueError(
-                f"Document not found: {evidence.document}"
-            )
+            raise ValueError(f"Document not found: {evidence.document}")
 
         matches = [
             chunk
@@ -46,10 +44,7 @@ def resolve_relevant_chunk_ids(
         ]
 
         if not matches:
-            raise ValueError(
-                f"{query.id}: "
-                f"{evidence.document} -> {evidence.text!r}"
-            )
+            raise ValueError(f"{query.id}: {evidence.document} -> {evidence.text!r}")
 
         relevant_ids.update(chunk.id for chunk in matches)
 
@@ -73,15 +68,27 @@ def resolve_dataset_ground_truth(
             errors.append(str(exc))
 
     if errors:
-        details = "\n".join(
-            f"  - {error}"
-            for error in errors
-        )
+        details = "\n".join(f"  - {error}" for error in errors)
 
         raise ValueError(
-            f"Evaluation dataset contains "
-            f"{len(errors)} unresolved queries:\n"
-            f"{details}"
+            f"Evaluation dataset contains {len(errors)} unresolved queries:\n{details}"
         )
 
     return ground_truth
+
+
+def is_relevant_result(result: RetrievalResult, query: EvaluationQuery) -> bool:
+
+    result_text = _normalize_text(result.text)
+    filename = result.metadata.get("filename")
+
+    for evidence in query.evidence:
+        if filename != evidence.document:
+            continue
+
+        evidence_text = _normalize_text(evidence.text)
+
+        if evidence_text in result_text:
+            return True
+
+    return False

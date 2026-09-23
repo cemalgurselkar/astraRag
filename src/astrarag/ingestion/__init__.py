@@ -1,5 +1,13 @@
 from astrarag.ingestion.chunker import FixedSizeChunker
-from astrarag.ingestion.parser import PDFParser
 from astrarag.ingestion.cleaner import TextCleaner
+from astrarag.ingestion.indexer import CorpusIndexer
+from astrarag.ingestion.paren_child_chunker import ParentChildChunker
+from astrarag.ingestion.parser import PDFParser
 
-__all__ = ["FixedSizeChunker", "PDFParser","TextCleaner"]
+__all__ = [
+    "CorpusIndexer",
+    "FixedSizeChunker",
+    "PDFParser",
+    "ParentChildChunker",
+    "TextCleaner",
+]

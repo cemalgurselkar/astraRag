@@ -22,10 +22,7 @@ def test_cleaner_normalizes_line_breaks() -> None:
 
     text = "Dense Passage\nRetrieval   for\nQuestion Answering"
 
-    assert (
-        cleaner.clean(text)
-        == "Dense Passage Retrieval for Question Answering"
-    )
+    assert cleaner.clean(text) == "Dense Passage Retrieval for Question Answering"
 
 
 def test_cleaner_handles_empty_text() -> None:

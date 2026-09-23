@@ -39,9 +39,7 @@ class PDFParser:
                     )
 
         if not pages:
-            raise ValueError(
-                f"No extractable text found in PDF: {file_path}"
-            )
+            raise ValueError(f"No extractable text found in PDF: {file_path}")
 
         return Document(
             id=document_id,

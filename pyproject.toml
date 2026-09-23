@@ -7,7 +7,11 @@ authors = [
     { name = "Cemal Gürsel", email = "cemalgurselkar@gmail.com" }
 ]
 requires-python = ">=3.11"
+
 dependencies = [
+    "fastapi>=0.141.1",
+    "google-genai>=2.25.0",
+    "huggingface-hub>=1.32.0",
     "numpy>=2.4.6",
     "pandas>=3.0.6",
     "pydantic>=2.13.5",
@@ -20,14 +24,18 @@ dependencies = [
     "sentence-transformers>=6.1.0",
     "structlog>=26.1.0",
     "tqdm>=4.70.1",
+    "uvicorn[standard]>=0.53.0",
 ]
 
+
 [project.scripts]
-astrarag = "astrarag:main"
+astrarag = "astrarag.cli:main"
+
 
 [build-system]
 requires = ["uv_build>=0.12.16,<0.13.0"]
 build-backend = "uv_build"
+
 
 [dependency-groups]
 dev = [

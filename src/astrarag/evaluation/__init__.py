@@ -8,8 +8,8 @@ from astrarag.evaluation.retrieval import (
 
 __all__ = [
     "load_evaluation_dataset",
-    "resolve_relevant_chunk_ids",
     "ndcg_at_k",
     "recall_at_k",
     "reciprocal_rank",
+    "resolve_relevant_chunk_ids",
 ]
