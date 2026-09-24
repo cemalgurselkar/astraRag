@@ -1,10 +1,12 @@
 # AstraRAG
 
-AstraRAG is a performance-oriented RAG engine for experimenting with retrieval strategies, context construction, and adaptive query routing.
+AstraRAG is an experiment-driven RAG engine for benchmarking retrieval strategies, context construction, and adaptive query routing.
 
-Instead of assuming that every query should use the same retrieval pipeline, AstraRAG supports retrieval routes with different quality and latency characteristics and evaluates their behavior through reproducible benchmarks.
+The project focuses on a simple question:
 
-The system can be used directly as a Python package, through its CLI, or as an HTTP API.
+> Where does a RAG pipeline lose retrieval quality, latency, or efficiency, and which techniques actually improve those trade-offs?
+
+Instead of adding techniques by default, AstraRAG follows a **measure → experiment → keep/reject** workflow.
 
 ## Architecture
 
@@ -17,122 +19,106 @@ PDF Parser → Cleaner → Chunker
    ▼
 Embedding Encoder
    │
-   ├─────────────────────┐
-   ▼                     ▼
-Qdrant Dense Index    BM25 Index
-   │                     │
-   └──────────┬──────────┘
-              │
-Query → Query Profiler → Router
-              │
-       ┌──────┼───────────┐
-       ▼      ▼           ▼
-     BM25   Hybrid   Hybrid + CE
-     CHEAP  MEDIUM    EXPENSIVE
-       └──────┼───────────┘
-              ▼
-        Context Engine
-              │
-              ▼
-         LLM Generator
-              │
-              ▼
-     Answer + Source Metadata
+   ├───────────────┐
+   ▼               ▼
+Qdrant          BM25 Index
+   │               │
+   └───────┬───────┘
+           │
+Query → Profiler → Router
+           │
+     ┌─────┼──────────┐
+     ▼     ▼          ▼
+   BM25  Hybrid   Hybrid + CE
+     │     │          │
+     └─────┴──────────┘
+           ▼
+     Context Engine
+           │
+           ▼
+     Gemini Generator
+           │
+           ▼
+   Answer + Sources
 ```
 
-The outer pipeline is deterministic. The language model is used for grounded answer generation rather than retrieval orchestration.
+The outer pipeline is deterministic. The LLM is used for grounded answer generation, while retrieval and routing remain measurable system components.
 
 ## Features
-
-AstraRAG currently includes:
 
 - PDF parsing and text cleaning
 - Fixed-size and parent-child chunking
 - Local sentence-transformer embeddings
 - Persistent Qdrant vector storage
-- Dense and BM25 sparse retrieval
+- Dense and BM25 retrieval
 - Hybrid retrieval with Reciprocal Rank Fusion
 - Cross-encoder reranking
-- Parent-child retrieval experiments
-- Query profiling and rule-based adaptive routing
+- Parent-child retrieval
+- Rule-based adaptive routing
 - Context deduplication and budgeting
-- Grounded generation with source metadata
-- Retrieval evaluation and benchmarking
-- Python, CLI, and REST API interfaces
-- Docker deployment
+- Gemini-based grounded generation
+- Retrieval and context benchmarking
+- Python, CLI, REST API, and Docker interfaces
 
-Embedding and cross-encoder inference run locally. The reference generation adapter currently uses the Gemini API.
+Embedding and cross-encoder inference run locally. Only generation requires the external Gemini API.
 
-## Adaptive Retrieval
+## Experiments
 
-AstraRAG exposes three retrieval routes:
+AstraRAG uses a 40-query development benchmark over five academic papers.
 
-```text
-CHEAP
-└── BM25
+The current fixed-size chunking baseline is **1800 characters / 200 overlap**, selected through a 15-configuration chunking ablation.
 
-MEDIUM
-└── Dense + BM25
-    └── Reciprocal Rank Fusion
+### Retrieval Benchmark
 
-EXPENSIVE
-└── Dense + BM25
-    └── Reciprocal Rank Fusion
-        └── Cross-Encoder Reranking
-```
-
-A lightweight query profiler extracts query characteristics and a rule-based router selects a retrieval route.
-
-Adaptive routing is treated as an experiment rather than an assumed improvement. Its behavior is measured against fixed retrieval strategies.
-
-## Benchmark
-
-The current development benchmark contains 40 evaluation queries over a five-paper academic corpus.
-
-| Strategy | Hit@5 | Hit@10 | MRR | nDCG@10 | Mean Retrieval Latency |
+| Strategy | Hit@5 | Hit@10 | MRR | nDCG@10 | Mean Latency |
 |---|---:|---:|---:|---:|---:|
-| BM25 | 0.700 | 0.775 | 0.568 | 0.622 | 0.71 ms |
-| Hybrid | 0.700 | 0.825 | 0.513 | 0.583 | 9.05 ms |
-| Hybrid + Cross-Encoder | 0.750 | 0.800 | 0.663 | 0.683 | 668.87 ms |
-| Adaptive Router | 0.700 | 0.800 | 0.559 | 0.611 | 181.30 ms |
+| Dense | 0.575 | 0.725 | 0.464 | 0.510 | 8.02 ms |
+| BM25 | 0.750 | 0.825 | 0.621 | 0.663 | 0.73 ms |
+| Hybrid RRF | **0.800** | **0.850** | 0.570 | 0.631 | 9.75 ms |
+| Hybrid + Cross-Encoder | 0.675 | 0.800 | 0.597 | 0.641 | 1197.42 ms |
+| Parent-Child | 0.675 | 0.750 | 0.463 | 0.531 | 9.63 ms |
 
-Adaptive route distribution:
+The experiments show that more complex retrieval is not automatically better. BM25 remains an extremely strong low-latency baseline, while Hybrid RRF provides the highest recall on the current benchmark.
 
-```text
-CHEAP       62.5%
-MEDIUM      15.0%
-EXPENSIVE   22.5%
-```
+Cross-encoder reranking improved ranking quality under an earlier chunking configuration but became significantly more expensive and less effective after the chunking baseline changed. This interaction is intentionally preserved as an experimental result.
 
-These are development results from the current corpus and evaluation set, not general RAG performance claims.
+### Additional Experiments
 
-The current rule-based router reduces the use of expensive cross-encoder reranking compared with always using it, but does not outperform the BM25 baseline on retrieval quality. This result is intentionally preserved as part of the experimental record.
+The repository also contains experiments with:
 
-## Quick Start with Docker
+- 15 fixed-size chunking configurations
+- Parent-child retrieval
+- Semantic context deduplication
+- MMR context selection
+- Multi-query retrieval
+- HyDE-style retrieval
+- Adaptive routing
 
-Docker is the simplest way to run AstraRAG. The image installs the Python environment and downloads the embedding and cross-encoder models during the build.
+Context clustering and MMR were rejected for the production path because they added substantial latency without improving evidence coverage on the current benchmark.
 
-Clone the repository:
+Multi-query retrieval was also rejected after failing to improve the Hybrid baseline while increasing retrieval latency.
+
+Experimental implementations are kept as evidence even when they are not part of the production pipeline.
+
+## Quick Start
+
+Docker is the recommended way to run AstraRAG.
 
 ```bash
 git clone <repository-url>
 cd AstraRAG
 ```
 
-Create a `.env` file:
+Create `.env`:
 
 ```env
 GEMINI_API_KEY=your_api_key
 ```
 
-Place PDF documents under:
+Place PDFs under:
 
 ```text
-data/
-└── documents/
-    ├── paper_1.pdf
-    ├── paper_2.pdf
-    └── ...
+data/documents/
 ```
 
 Build the image:
@@ -153,23 +139,15 @@ Start the API:
 docker compose up -d
 ```
 
-The API is available at:
+Open the API documentation at:
 
-```text
-http://localhost:8000
-```
+`http://localhost:8000/docs`
 
-Interactive OpenAPI documentation:
-
-```text
-http://localhost:8000/docs
-```
-
-Qdrant data is persisted under `data/qdrant/`, so the index survives container recreation.
+Qdrant data is persisted under `data/qdrant/`.
 
 ## Local Installation
 
-AstraRAG requires Python 3.11 and uses `uv`.
+AstraRAG requires Python 3.11 and `uv`.
 
 ```bash
 uv sync
@@ -183,7 +161,7 @@ mkdir -p models
 uv run hf download sentence-transformers/all-MiniLM-L6-v2 \
   --local-dir models/all-MiniLM-L6-v2
 
-uv run hf download cross-encoder/ms-marco-MiniLM-L6-v2 \
+uv run hf download cross-encoder/ms-marco-MiniLM-L-6-v2 \
   --local-dir models/ms-marco-MiniLM-L6-v2
 ```
 
@@ -193,27 +171,20 @@ Create `.env`:
 GEMINI_API_KEY=your_api_key
 ```
 
-Place PDFs in `data/documents/` and build the index:
+Then index and run:
 
 ```bash
 uv run astrarag index
+uv run astrarag serve
 ```
 
-A custom document directory can also be supplied:
+A custom PDF directory can also be indexed:
 
 ```bash
 uv run astrarag index /path/to/pdfs
 ```
 
-Start the API:
-
-```bash
-uv run astrarag serve
-```
-
 ## Python Usage
-
-AstraRAG can be used independently from the HTTP layer:
 
 ```python
 from astrarag import AstraRAG
@@ -230,59 +201,33 @@ with AstraRAG() as rag:
 
 ## REST API
 
-The service exposes:
-
 ```text
 GET  /health
 POST /query
 GET  /docs
 ```
 
-Example request:
+Example:
 
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is the main idea behind Sentence-BERT?"
-  }'
+  -d '{"query": "What is the main idea behind Sentence-BERT?"}'
 ```
 
-Example response:
-
-```json
-{
-  "answer": "...",
-  "route": "cheap",
-  "sources": [
-    {
-      "chunk_id": "...",
-      "document_id": "...",
-      "pages": [3]
-    }
-  ],
-  "retrieval_latency_ms": 0.79,
-  "total_latency_ms": 8223.48
-}
-```
-
-Retrieval latency is reported separately from total pipeline latency because generation currently depends on an external LLM provider.
+Responses include the generated answer, selected retrieval route, source metadata, retrieval latency, and total pipeline latency.
 
 ## Evaluation
 
-Retrieval strategies are evaluated independently from generation using:
+Retrieval experiments measure:
 
-```text
-Hit@5
-Hit@10
-MRR
-nDCG@10
-Retrieval latency
-```
+- Hit@5
+- Hit@10
+- MRR
+- nDCG@10
+- Retrieval latency
 
-The repository contains experiments for dense retrieval, BM25, hybrid retrieval, cross-encoder reranking, parent-child retrieval, and adaptive routing.
-
-AstraRAG follows an experiment-driven development loop:
+Development follows the same loop throughout the project:
 
 ```text
 Baseline
@@ -291,7 +236,7 @@ Benchmark
    ↓
 Error Analysis
    ↓
-Identify Bottleneck
+Hypothesis
    ↓
 Experiment
    ↓
@@ -300,21 +245,19 @@ Measure
 Keep / Reject
 ```
 
-Failed or neutral experiments are useful evidence and are not presented as improvements.
+Failed and neutral experiments are retained rather than presented as improvements.
 
 ## Tests
-
-Run the unit test suite with:
 
 ```bash
 uv run pytest test/unit -v
 ```
 
-## Project Direction
+Lint:
 
-AstraRAG establishes a measurable RAG system before introducing additional complexity.
-
-The current router, chunking configuration, embedding model, and retrieval configuration are baselines rather than claims of optimality. Future experiments can investigate larger corpora, chunking and embedding ablations, improved context engineering, evidence grading, additional retrieval strategies, and retrieval-history-based routing.
+```bash
+uv run ruff check src test
+```
 
 ## Tech Stack
 

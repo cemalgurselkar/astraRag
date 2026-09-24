@@ -6,19 +6,19 @@ from time import perf_counter
 import numpy as np
 from qdrant_client import QdrantClient
 
-from astrarag.context import ClusteredContextEngine, ContextEngine
+from astrarag.context import ClusteredContextEngine, ContextEngine, MMRContextEngine
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import load_evaluation_dataset
 from astrarag.index import BM25Index, DenseVectorIndex
 from astrarag.retrieval import BM25Retriever
 
 
-TOP_N = 10
+TOP_N = 20
 MAX_CHAR = 12_000
 MAX_ITEMS = 10
 
 CLUSTER_THRESHOLDS = (0.80, 0.85, 0.90, 0.95)
-
+MMR_LAMBDAS = (0.50, 0.70, 0.90)
 # Used only for measuring how many highly similar pairs remain
 # in the final context.
 REDUNDANCY_THRESHOLD = 0.90
@@ -299,10 +299,6 @@ def main() -> None:
                 )
             )
 
-        # --------------------------------------------------
-        # Context experiments
-        # --------------------------------------------------
-
         experiments = [
             (
                 "Baseline",
@@ -325,6 +321,19 @@ def main() -> None:
                     ),
                 )
             )
+        
+        for lambda_mult in MMR_LAMBDAS:
+            experiments.append(
+                (
+                    f"MMR {lambda_mult:.2f}",
+                    MMRContextEngine(
+                        encoder=encoder,
+                        max_char=MAX_CHAR,
+                        max_items=MAX_ITEMS,
+                        lambda_mult=lambda_mult,
+                    ),
+                )
+            )
 
         results = [
             evaluate_context(
@@ -336,9 +345,6 @@ def main() -> None:
             for name, engine in experiments
         ]
 
-        # --------------------------------------------------
-        # Results
-        # --------------------------------------------------
 
         print()
         print("Context Benchmark")

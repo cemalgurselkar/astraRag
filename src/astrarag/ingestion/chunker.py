@@ -2,7 +2,7 @@ from astrarag.schemas import Chunk, Document
 
 
 class FixedSizeChunker:
-    def __init__(self, chunk_size: int = 1000, overlap: int = 200):
+    def __init__(self, chunk_size: int = 1800, overlap: int = 200):
 
         if chunk_size <= 0:
             raise ValueError("Chunk size must be greater than 0")
