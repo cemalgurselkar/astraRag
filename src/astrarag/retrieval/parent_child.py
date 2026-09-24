@@ -1,3 +1,5 @@
+"""Promote retrieved child chunks to deduplicated, score-ranked parent contexts."""
+
 from astrarag.schemas import RetrievalResult
 
 

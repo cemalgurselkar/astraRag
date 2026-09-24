@@ -1,3 +1,5 @@
+"""Define the request and response models exposed by the HTTP API."""
+
 from pydantic import BaseModel, Field
 
 

@@ -1,3 +1,5 @@
+"""Map query profiles to cheap, medium, or expensive retrieval routes."""
+
 from astrarag.schemas import QueryProfile, RetrievalRoute
 
 

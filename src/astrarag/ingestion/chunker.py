@@ -1,3 +1,5 @@
+"""Split documents into overlapping fixed-size chunks with source metadata."""
+
 from astrarag.schemas import Chunk, Document
 
 

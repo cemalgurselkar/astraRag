@@ -1,3 +1,5 @@
+"""Verify that hierarchical chunking preserves parent-child relationships."""
+
 from astrarag.ingestion import ParentChildChunker
 from astrarag.schemas import Document, Page
 

@@ -1,3 +1,5 @@
+"""Fuse dense and BM25 rankings with reciprocal rank fusion."""
+
 from astrarag.retrieval.dense import DenseRetriever
 from astrarag.retrieval.sparse import BM25Retriever
 from astrarag.schemas import RetrievalResult

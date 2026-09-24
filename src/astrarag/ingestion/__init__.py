@@ -1,3 +1,5 @@
+"""Export PDF parsing, cleaning, chunking, and corpus-indexing tools."""
+
 from astrarag.ingestion.chunker import FixedSizeChunker
 from astrarag.ingestion.cleaner import TextCleaner
 from astrarag.ingestion.indexer import CorpusIndexer

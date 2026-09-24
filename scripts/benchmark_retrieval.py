@@ -1,7 +1,11 @@
+"""Compare BM25, dense, hybrid, hierarchical, and reranked retrieval strategies."""
+
 import math
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
+
+from qdrant_client import QdrantClient
 
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import load_evaluation_dataset
@@ -18,8 +22,6 @@ from astrarag.retrieval import (
     ParentChildRetriever,
     RerankedRetriever,
 )
-
-from qdrant_client import QdrantClient
 
 TOP_K = 10
 

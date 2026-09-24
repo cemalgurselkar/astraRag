@@ -1,3 +1,5 @@
+"""Build compact contexts by clustering semantically similar retrieval results."""
+
 from collections.abc import Sequence
 
 import numpy as np

@@ -1,3 +1,5 @@
+"""Verify adaptive routing, result assembly, and latency tracking."""
+
 from astrarag.context import ContextEngine
 from astrarag.pipeline import AdaptiveRAGPipeline
 from astrarag.routing import QueryProfiler, RuleBasedRouter

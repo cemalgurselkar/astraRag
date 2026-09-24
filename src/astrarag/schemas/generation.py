@@ -1,3 +1,5 @@
+"""Define the validated output of answer generation."""
+
 from pydantic import BaseModel, Field
 
 

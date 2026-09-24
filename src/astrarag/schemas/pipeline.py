@@ -1,3 +1,5 @@
+"""Define the aggregate result returned by the adaptive RAG pipeline."""
+
 from pydantic import BaseModel, Field
 
 from astrarag.schemas.context import ContextPackage

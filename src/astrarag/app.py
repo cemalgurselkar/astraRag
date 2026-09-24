@@ -1,3 +1,5 @@
+"""Compose AstraRAG's indexing, retrieval, routing, context, and generation services."""
+
 from typing import Self
 
 from qdrant_client import QdrantClient

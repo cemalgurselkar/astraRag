@@ -1,3 +1,5 @@
+"""Load and validate retrieval evaluation queries from JSON datasets."""
+
 import json
 from pathlib import Path
 

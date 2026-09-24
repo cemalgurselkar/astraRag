@@ -1,3 +1,5 @@
+"""Run a minimal end-to-end query through the high-level AstraRAG interface."""
+
 from astrarag import AstraRAG
 
 

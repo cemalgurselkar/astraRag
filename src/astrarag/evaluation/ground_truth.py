@@ -1,3 +1,5 @@
+"""Resolve evidence annotations to chunks and judge retrieved-result relevance."""
+
 import re
 import unicodedata
 from collections.abc import Sequence

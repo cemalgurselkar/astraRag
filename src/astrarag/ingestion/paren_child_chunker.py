@@ -1,3 +1,5 @@
+"""Create linked parent and child chunks for hierarchical retrieval."""
+
 from astrarag.schemas import Chunk, Document
 
 

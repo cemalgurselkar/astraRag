@@ -1,3 +1,5 @@
+"""Reorder retrieved candidates by cross-encoder query relevance."""
+
 from collections.abc import Sequence
 from pathlib import Path
 

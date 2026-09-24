@@ -1,3 +1,5 @@
+"""Build bounded generation contexts while removing duplicate retrieval results."""
+
 from collections.abc import Sequence
 
 from astrarag.schemas import ContextItem, ContextPackage, RetrievalResult

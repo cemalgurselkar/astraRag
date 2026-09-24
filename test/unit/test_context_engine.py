@@ -1,3 +1,5 @@
+"""Verify basic context assembly, deduplication, and size constraints."""
+
 from astrarag.context import ContextEngine
 from astrarag.schemas import RetrievalResult
 

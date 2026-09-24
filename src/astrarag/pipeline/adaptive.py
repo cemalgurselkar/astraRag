@@ -1,3 +1,5 @@
+"""Route queries through retrieval tiers and assemble generated pipeline results."""
+
 from time import perf_counter
 from typing import Protocol
 

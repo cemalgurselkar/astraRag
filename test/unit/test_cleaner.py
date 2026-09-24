@@ -1,3 +1,5 @@
+"""Verify normalization and artifact repair performed by the text cleaner."""
+
 from astrarag.ingestion import TextCleaner
 
 

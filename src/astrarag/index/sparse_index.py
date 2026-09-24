@@ -1,3 +1,5 @@
+"""Index chunks and retrieve lexical matches with BM25."""
+
 import re
 from collections.abc import Sequence
 

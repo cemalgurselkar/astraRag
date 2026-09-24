@@ -1,3 +1,5 @@
+"""Define retrieval route levels and the query signals used to select them."""
+
 from enum import StrEnum
 
 from pydantic import BaseModel, Field

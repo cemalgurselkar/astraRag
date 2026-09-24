@@ -1,3 +1,5 @@
+"""Load AstraRAG runtime settings from environment variables and dotenv files."""
+
 from pathlib import Path
 
 from pydantic import Field

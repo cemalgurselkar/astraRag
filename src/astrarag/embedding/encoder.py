@@ -1,3 +1,5 @@
+"""Encode passages and queries as normalized SentenceTransformer vectors."""
+
 from collections.abc import Sequence
 from pathlib import Path
 

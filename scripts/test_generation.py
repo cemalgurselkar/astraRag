@@ -1,3 +1,5 @@
+"""Exercise Gemini answer generation with a small synthetic retrieval context."""
+
 from astrarag.config import Settings
 from astrarag.context import ContextEngine
 from astrarag.generation import GeminiGenerator

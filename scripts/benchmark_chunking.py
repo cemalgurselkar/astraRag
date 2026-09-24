@@ -1,3 +1,5 @@
+"""Measure retrieval quality and latency across chunk-size and overlap settings."""
+
 import math
 from pathlib import Path
 from statistics import mean
@@ -19,7 +21,6 @@ from astrarag.retrieval import (
     DenseRetriever,
     HybridRetriever,
 )
-
 
 TOP_K = 10
 

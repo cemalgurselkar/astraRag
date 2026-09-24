@@ -1,3 +1,5 @@
+"""Orchestrate PDF parsing, chunking, embedding, and Qdrant indexing."""
+
 from collections.abc import Iterable
 from pathlib import Path
 

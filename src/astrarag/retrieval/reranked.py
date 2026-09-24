@@ -1,3 +1,5 @@
+"""Retrieve a broad candidate set and refine it with a cross-encoder."""
+
 from astrarag.reranking import CrossEncoderReRanker
 from astrarag.schemas import RetrievalResult
 

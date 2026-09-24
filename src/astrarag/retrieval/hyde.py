@@ -1,3 +1,5 @@
+"""Retrieve chunks from an embedding of a hypothetical Gemini-generated answer."""
+
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.index import DenseVectorIndex
 from astrarag.retrieval.query_transformer import GeminiQueryTransformer

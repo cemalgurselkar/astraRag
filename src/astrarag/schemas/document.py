@@ -1,3 +1,5 @@
+"""Define validated page, document, and chunk representations."""
+
 from typing import Any
 
 from pydantic import BaseModel, Field

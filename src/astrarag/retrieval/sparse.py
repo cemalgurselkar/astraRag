@@ -1,3 +1,5 @@
+"""Adapt the BM25 index to the common retriever interface."""
+
 from astrarag.index import BM25Index
 from astrarag.schemas import RetrievalResult
 

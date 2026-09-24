@@ -1,3 +1,5 @@
+"""Generate source-grounded answers from packaged context with Gemini."""
+
 from google import genai
 from google.genai import types
 

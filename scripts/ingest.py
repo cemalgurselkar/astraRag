@@ -1,10 +1,11 @@
+"""Parse, chunk, embed, and index the raw PDF corpus for dense retrieval."""
+
 from pathlib import Path
 from time import perf_counter
 
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.index import DenseVectorIndex
 from astrarag.ingestion import FixedSizeChunker, PDFParser
-
 
 RAW_DATA_DIR = Path("data/raw")
 QDRANT_PATH = Path("data/qdrant")

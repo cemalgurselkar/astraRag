@@ -1,3 +1,5 @@
+"""Extract lexical signals that describe a query's retrieval complexity."""
+
 import re
 
 from astrarag.schemas import QueryProfile

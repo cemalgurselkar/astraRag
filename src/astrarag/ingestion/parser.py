@@ -1,3 +1,5 @@
+"""Extract, clean, and identify page-level content from PDF files."""
+
 from hashlib import sha256
 from pathlib import Path
 

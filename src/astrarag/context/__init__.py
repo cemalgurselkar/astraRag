@@ -1,3 +1,5 @@
+"""Export context-building strategies for preparing retrieved evidence."""
+
 from astrarag.context.clustered_engine import ClusteredContextEngine
 from astrarag.context.engine import ContextEngine
 from astrarag.context.mmr_engine import MMRContextEngine

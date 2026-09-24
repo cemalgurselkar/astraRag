@@ -1,3 +1,5 @@
+"""Define validated models for selected evidence and assembled context."""
+
 from pydantic import BaseModel, Field
 
 

@@ -1,3 +1,5 @@
+"""Compare context builders on evidence coverage, redundancy, size, and latency."""
+
 import re
 from pathlib import Path
 from statistics import mean
@@ -11,7 +13,6 @@ from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import load_evaluation_dataset
 from astrarag.index import BM25Index, DenseVectorIndex
 from astrarag.retrieval import BM25Retriever
-
 
 TOP_N = 20
 MAX_CHAR = 12_000

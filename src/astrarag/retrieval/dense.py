@@ -1,3 +1,5 @@
+"""Retrieve semantically similar chunks through dense vector search."""
+
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.index import DenseVectorIndex
 from astrarag.schemas import RetrievalResult

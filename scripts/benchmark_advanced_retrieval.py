@@ -1,3 +1,5 @@
+"""Benchmark advanced query transformations and rank-fusion retrieval strategies."""
+
 import json
 import math
 from pathlib import Path
@@ -19,7 +21,6 @@ from astrarag.retrieval import (
     HybridRetriever,
 )
 from astrarag.schemas import RetrievalResult
-
 
 TOP_K = 10
 CANDIDATE_K = 20

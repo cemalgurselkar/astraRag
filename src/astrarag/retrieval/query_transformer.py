@@ -1,3 +1,5 @@
+"""Use Gemini to expand queries and generate hypothetical documents for retrieval."""
+
 from google import genai
 from google.genai import types
 

@@ -1,3 +1,5 @@
+"""Smoke-test multi-query and HyDE retrieval against the configured vector index."""
+
 from pathlib import Path
 
 from qdrant_client import QdrantClient
@@ -6,12 +8,11 @@ from astrarag.config import Settings
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.index import DenseVectorIndex
 from astrarag.retrieval import (
+    DenseRetriever,
     GeminiQueryTransformer,
     HyDERetriever,
     MultiQueryRetriever,
-    DenseRetriever,
 )
-
 
 settings = Settings()
 encoder = EmbeddingEncoder()

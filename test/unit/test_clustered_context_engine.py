@@ -1,3 +1,5 @@
+"""Verify semantic deduplication and limits in clustered context selection."""
+
 import numpy as np
 
 from astrarag.context import ClusteredContextEngine

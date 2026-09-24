@@ -1,10 +1,11 @@
+"""Inspect dense retrieval results for a selected set of evaluation queries."""
+
 from pathlib import Path
 
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import load_evaluation_dataset
 from astrarag.index import DenseVectorIndex
 from astrarag.retrieval import DenseRetriever
-
 
 QUERY_IDS = {
     "attention-006",

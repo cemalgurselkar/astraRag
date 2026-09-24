@@ -1,3 +1,5 @@
+"""Compare fixed retrieval strategies with adaptive rule-based query routing."""
+
 from collections import Counter
 from pathlib import Path
 from statistics import mean
@@ -21,7 +23,6 @@ from astrarag.retrieval import (
 )
 from astrarag.routing import QueryProfiler, RuleBasedRouter
 from astrarag.schemas import RetrievalRoute
-
 
 TOP_K = 10
 

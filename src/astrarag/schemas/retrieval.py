@@ -1,3 +1,5 @@
+"""Define a scored chunk returned by a retrieval strategy."""
+
 from pydantic import BaseModel, Field
 
 

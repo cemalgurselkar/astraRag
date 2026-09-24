@@ -1,3 +1,5 @@
+"""Normalize extracted text and repair common PDF conversion artifacts."""
+
 import re
 import unicodedata
 

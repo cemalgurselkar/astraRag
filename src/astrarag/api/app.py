@@ -1,3 +1,5 @@
+"""Serve AstraRAG health checks and retrieval-augmented queries via FastAPI."""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 

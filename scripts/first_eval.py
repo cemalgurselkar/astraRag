@@ -1,8 +1,9 @@
+"""Create an initial annotated evaluation dataset from parsed and chunked PDFs."""
+
 import json
 from pathlib import Path
 
 from astrarag.ingestion import FixedSizeChunker, PDFParser
-
 
 QUERIES = [
     ("attention-001", "What is multi-head attention?", "semantic",

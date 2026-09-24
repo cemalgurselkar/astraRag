@@ -1,3 +1,5 @@
+"""Verify query profiling and rule-based selection of retrieval cost tiers."""
+
 import pytest
 
 from astrarag.routing import QueryProfiler, RuleBasedRouter

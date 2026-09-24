@@ -1,3 +1,5 @@
+"""Compute recall, reciprocal rank, and NDCG for retrieval results."""
+
 import math
 from collections.abc import Sequence
 

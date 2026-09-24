@@ -1,3 +1,5 @@
+"""Define evaluation query types, evidence annotations, and dataset records."""
+
 from enum import StrEnum
 
 from pydantic import BaseModel, Field

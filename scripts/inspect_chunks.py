@@ -1,7 +1,8 @@
+"""Print fixed-size chunks from a sample PDF for quick manual inspection."""
+
 from pathlib import Path
 
 from astrarag.ingestion import FixedSizeChunker, PDFParser
-
 
 pdf_path = Path("data/raw/attention.pdf")
 

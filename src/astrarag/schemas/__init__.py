@@ -1,3 +1,5 @@
+"""Expose AstraRAG's shared domain and pipeline data models."""
+
 from astrarag.schemas.context import ContextItem, ContextPackage
 from astrarag.schemas.document import Chunk, Document, Page
 from astrarag.schemas.evaluation import EvaluationQuery, Evidence, QueryType

@@ -1,3 +1,5 @@
+"""Define grounding instructions and construct prompts for answer generation."""
+
 SYSTEM_INSTRUCTION = """
 You are the generation component of AstraRAG, an academic retrieval-augmented
 generation system.

@@ -1,3 +1,5 @@
+"""Persist chunk embeddings in Qdrant and perform dense vector search."""
+
 from collections.abc import Sequence
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5

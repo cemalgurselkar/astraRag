@@ -1,9 +1,10 @@
+"""Build a dense index of linked parent and child chunks from the PDF corpus."""
+
 from pathlib import Path
 
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.index import DenseVectorIndex
-from astrarag.ingestion import PDFParser, ParentChildChunker
-
+from astrarag.ingestion import ParentChildChunker, PDFParser
 
 RAW_DIR = Path("data/documents")
 QDRANT_PATH = Path("data/qdrant")

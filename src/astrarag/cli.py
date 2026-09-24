@@ -1,3 +1,5 @@
+"""Provide command-line entry points for indexing, serving, and evaluation."""
+
 import argparse
 from pathlib import Path
 

@@ -1,3 +1,5 @@
+"""Expand a question into multiple queries and fuse their retrieval rankings."""
+
 from astrarag.retrieval.query_transformer import GeminiQueryTransformer
 from astrarag.schemas import RetrievalResult
 

@@ -1,3 +1,5 @@
+"""Select relevant, diverse context items with maximal marginal relevance."""
+
 import numpy as np
 
 from astrarag.embedding import EmbeddingEncoder

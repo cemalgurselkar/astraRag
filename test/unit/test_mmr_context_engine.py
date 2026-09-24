@@ -1,3 +1,5 @@
+"""Verify MMR context diversity, relevance, and output size constraints."""
+
 import numpy as np
 
 from astrarag.context import MMRContextEngine

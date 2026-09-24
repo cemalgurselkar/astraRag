@@ -1,3 +1,5 @@
+"""Evaluate the dense retrieval baseline with ranking-quality and latency metrics."""
+
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
@@ -11,7 +13,6 @@ from astrarag.evaluation import (
 )
 from astrarag.index import DenseVectorIndex
 from astrarag.retrieval import DenseRetriever
-
 
 TOP_K = 10
 

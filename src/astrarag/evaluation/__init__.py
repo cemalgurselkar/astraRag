@@ -1,3 +1,5 @@
+"""Export dataset, ground-truth, and retrieval evaluation utilities."""
+
 from astrarag.evaluation.dataset import load_evaluation_dataset
 from astrarag.evaluation.ground_truth import resolve_relevant_chunk_ids
 from astrarag.evaluation.retrieval import (
