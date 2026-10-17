@@ -1,24 +1,22 @@
-"""Compose AstraRAG's indexing, retrieval, routing, context, and generation services."""
+"""Compose and expose the AstraRAG runtime."""
 
 from typing import Self
 
 from qdrant_client import QdrantClient
 
 from astrarag.config import Settings
-from astrarag.context import ContextEngine
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.generation import GeminiGenerator
-from astrarag.index import BM25Index, DenseVectorIndex
-from astrarag.pipeline import AdaptiveRAGPipeline
-from astrarag.reranking import CrossEncoderReRanker
+from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.models import PipelineResult, RetrievalRoute
+from astrarag.pipeline import RAGPipeline
 from astrarag.retrieval import (
-    BM25Retriever,
+    CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
     RerankedRetriever,
+    Retriever,
 )
-from astrarag.routing import QueryProfiler, RuleBasedRouter
-from astrarag.schemas import PipelineResult, RetrievalRoute
 
 
 class AstraRAG:
@@ -31,11 +29,14 @@ class AstraRAG:
         self.settings = settings or Settings()
 
         self._qdrant_client: QdrantClient | None = None
-        self._pipeline: AdaptiveRAGPipeline | None = None
+        self._generator: GeminiGenerator | None = None
+        self._pipeline: RAGPipeline | None = None
 
     def start(self) -> None:
         if self._pipeline is not None:
             return
+        if not self.settings.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is required to start AstraRAG")
 
         encoder = EmbeddingEncoder(model_name=self.settings.embedding_model_path)
 
@@ -63,46 +64,39 @@ class AstraRAG:
             index=dense_index,
         )
 
-        bm25_index = BM25Index()
-        bm25_index.build(chunks)
-
-        bm25 = BM25Retriever(
-            index=bm25_index,
-        )
+        bm25 = BM25Index(chunks)
 
         hybrid = HybridRetriever(
-            dense_retriever=dense,
-            sparse_retriever=bm25,
+            dense=dense,
+            sparse=bm25,
             rrf_k=self.settings.hybrid_rrf_k,
         )
 
-        reranker = CrossEncoderReRanker(model_name=self.settings.reranker_model_path)
+        reranker = CrossEncoderReranker(model_name=self.settings.reranker_model_path)
 
         hybrid_ce = RerankedRetriever(
-            base_retriever=hybrid,
+            base=hybrid,
             reranker=reranker,
             candidate_k=self.settings.reranker_candidate_k,
         )
 
-        retrievers = {
+        retrievers: dict[RetrievalRoute, Retriever] = {
             RetrievalRoute.CHEAP: bm25,
             RetrievalRoute.MEDIUM: hybrid,
             RetrievalRoute.EXPENSIVE: hybrid_ce,
         }
 
-        self._pipeline = AdaptiveRAGPipeline(
-            profiler=QueryProfiler(),
-            router=RuleBasedRouter(),
+        self._generator = GeminiGenerator(
+            api_key=self.settings.gemini_api_key,
+            model=self.settings.gemini_model,
+        )
+
+        self._pipeline = RAGPipeline(
             retrievers=retrievers,
-            context_engine=ContextEngine(
-                max_items=self.settings.context_max_items,
-                max_char=self.settings.context_max_char,
-            ),
-            generator=GeminiGenerator(
-                api_key=self.settings.gemini_api_key,
-                model=self.settings.gemini_model,
-            ),
+            generator=self._generator,
             top_k=self.settings.retrieval_top_k,
+            context_max_items=self.settings.context_max_items,
+            context_max_characters=self.settings.context_max_char,
         )
 
     def query(self, query: str) -> PipelineResult:
@@ -112,6 +106,10 @@ class AstraRAG:
         return self._pipeline.run(query)
 
     def close(self) -> None:
+        if self._generator is not None:
+            self._generator.close()
+            self._generator = None
+
         if self._qdrant_client is not None:
             self._qdrant_client.close()
             self._qdrant_client = None

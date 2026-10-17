@@ -45,3 +45,11 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.16.8",
 ]
+
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+markers = [
+    "slow: uses local models or persistent infrastructure",
+    "live: optional external-service or full-corpus acceptance test",
+]

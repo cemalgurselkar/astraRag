@@ -7,20 +7,15 @@ from time import perf_counter
 
 from qdrant_client import QdrantClient
 
+from astrarag.documents import chunk_document, parse_pdf
 from astrarag.embedding import EmbeddingEncoder
-from astrarag.evaluation import load_evaluation_dataset
-from astrarag.evaluation.ground_truth import (
+from astrarag.evaluation import (
     is_relevant_result,
+    load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.index import BM25Index, DenseVectorIndex
-from astrarag.ingestion.chunker import FixedSizeChunker
-from astrarag.ingestion.parser import PDFParser
-from astrarag.retrieval import (
-    BM25Retriever,
-    DenseRetriever,
-    HybridRetriever,
-)
+from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.retrieval import DenseRetriever, HybridRetriever
 
 TOP_K = 10
 
@@ -71,10 +66,7 @@ def ndcg(relevance: list[bool], k: int) -> float:
 
     ideal_count = min(relevant_count, k)
 
-    idcg = sum(
-        1.0 / math.log2(rank + 1)
-        for rank in range(1, ideal_count + 1)
-    )
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
 
     return dcg / idcg
 
@@ -89,19 +81,14 @@ def evaluate(retriever, queries):
     for query in queries:
         start = perf_counter()
 
-        results = retriever.retriever(
+        results = retriever.retrieve(
             query=query.query,
             top_k=TOP_K,
         )
 
-        latencies.append(
-            (perf_counter() - start) * 1000
-        )
+        latencies.append((perf_counter() - start) * 1000)
 
-        relevance = [
-            is_relevant_result(result, query)
-            for result in results
-        ]
+        relevance = [is_relevant_result(result, query) for result in results]
 
         hit5.append(hit_at_k(relevance, 5))
         hit10.append(hit_at_k(relevance, 10))
@@ -119,20 +106,11 @@ def evaluate(retriever, queries):
 
 def main() -> None:
     encoder = EmbeddingEncoder()
-    parser = PDFParser()
+    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
 
-    queries = load_evaluation_dataset(
-        Path("data/eval/retrieval_v1.json")
-    )
+    pdf_paths = sorted(Path("data/documents").rglob("*.pdf"))
 
-    pdf_paths = sorted(
-        Path("data/documents").rglob("*.pdf")
-    )
-
-    documents = [
-        parser.parse(path)
-        for path in pdf_paths
-    ]
+    documents = [parse_pdf(path) for path in pdf_paths]
 
     print(f"Documents: {len(documents)}")
     print(f"Queries: {len(queries)}")
@@ -141,20 +119,12 @@ def main() -> None:
 
     for chunk_size, overlap in CONFIGS:
         print()
-        print(
-            f"Testing chunk_size={chunk_size}, "
-            f"overlap={overlap}"
-        )
-
-        chunker = FixedSizeChunker(
-            chunk_size=chunk_size,
-            overlap=overlap,
-        )
+        print(f"Testing chunk_size={chunk_size}, overlap={overlap}")
 
         chunks = [
             chunk
             for document in documents
-            for chunk in chunker.chunk(document)
+            for chunk in chunk_document(document, chunk_size, overlap)
         ]
 
         # Important: validate the same evaluation evidence
@@ -164,9 +134,7 @@ def main() -> None:
             chunks=chunks,
         )
 
-        embeddings = encoder.encode(
-            [chunk.text for chunk in chunks]
-        )
+        embeddings = encoder.encode([chunk.text for chunk in chunks])
 
         client = QdrantClient(":memory:")
 
@@ -188,16 +156,11 @@ def main() -> None:
                 index=dense_index,
             )
 
-            bm25_index = BM25Index()
-            bm25_index.build(chunks)
-
-            bm25 = BM25Retriever(
-                index=bm25_index,
-            )
+            bm25 = BM25Index(chunks)
 
             hybrid = HybridRetriever(
-                dense_retriever=dense,
-                sparse_retriever=bm25,
+                dense=dense,
+                sparse=bm25,
             )
 
             for strategy_name, retriever in [

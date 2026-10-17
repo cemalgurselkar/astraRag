@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    gemini_api_key: str = Field(min_length=1)
+    gemini_api_key: str | None = Field(default=None, min_length=1)
     gemini_model: str = "gemini-3.6-flash"
 
     documents_path: Path = Path("data/documents")

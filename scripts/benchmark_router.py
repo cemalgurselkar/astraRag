@@ -8,21 +8,20 @@ from time import perf_counter
 from qdrant_client import QdrantClient
 
 from astrarag.embedding import EmbeddingEncoder
-from astrarag.evaluation.dataset import load_evaluation_dataset
-from astrarag.evaluation.ground_truth import (
+from astrarag.evaluation import (
     is_relevant_result,
+    load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.index import BM25Index, DenseVectorIndex
-from astrarag.reranking import CrossEncoderReRanker
+from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.models import RetrievalRoute
 from astrarag.retrieval import (
-    BM25Retriever,
+    CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
     RerankedRetriever,
 )
-from astrarag.routing import QueryProfiler, RuleBasedRouter
-from astrarag.schemas import RetrievalRoute
+from astrarag.routing import choose_route, profile_query
 
 TOP_K = 10
 
@@ -65,10 +64,7 @@ def ndcg_at_k(
 
     ideal_count = min(relevant_count, k)
 
-    idcg = sum(
-        1.0 / math.log2(rank + 1)
-        for rank in range(1, ideal_count + 1)
-    )
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
 
     return dcg / idcg
 
@@ -87,32 +83,19 @@ def evaluate_strategy(
     for query in queries:
         start = perf_counter()
 
-        results = retriever.retriever(
+        results = retriever.retrieve(
             query=query.query,
             top_k=TOP_K,
         )
 
-        latency_ms = (
-            perf_counter() - start
-        ) * 1000
+        latency_ms = (perf_counter() - start) * 1000
 
-        relevance = [
-            is_relevant_result(result, query)
-            for result in results
-        ]
+        relevance = [is_relevant_result(result, query) for result in results]
 
-        hit_5_scores.append(
-            hit_at_k(relevance, 5)
-        )
-        hit_10_scores.append(
-            hit_at_k(relevance, 10)
-        )
-        reciprocal_ranks.append(
-            reciprocal_rank(relevance)
-        )
-        ndcg_scores.append(
-            ndcg_at_k(relevance, 10)
-        )
+        hit_5_scores.append(hit_at_k(relevance, 5))
+        hit_10_scores.append(hit_at_k(relevance, 10))
+        reciprocal_ranks.append(reciprocal_rank(relevance))
+        ndcg_scores.append(ndcg_at_k(relevance, 10))
         latencies.append(latency_ms)
 
     return {
@@ -127,8 +110,6 @@ def evaluate_strategy(
 
 def evaluate_adaptive(
     queries,
-    profiler: QueryProfiler,
-    router: RuleBasedRouter,
     retrievers: dict[RetrievalRoute, object],
 ) -> tuple[dict[str, object], Counter]:
     hit_5_scores: list[float] = []
@@ -142,39 +123,25 @@ def evaluate_adaptive(
     for query in queries:
         start = perf_counter()
 
-        profile = profiler.profile(query.query)
-        route = router.route(profile)
+        route = choose_route(profile_query(query.query))
 
         route_counts[route] += 1
 
         retriever = retrievers[route]
 
-        results = retriever.retriever(
+        results = retriever.retrieve(
             query=query.query,
             top_k=TOP_K,
         )
 
-        latency_ms = (
-            perf_counter() - start
-        ) * 1000
+        latency_ms = (perf_counter() - start) * 1000
 
-        relevance = [
-            is_relevant_result(result, query)
-            for result in results
-        ]
+        relevance = [is_relevant_result(result, query) for result in results]
 
-        hit_5_scores.append(
-            hit_at_k(relevance, 5)
-        )
-        hit_10_scores.append(
-            hit_at_k(relevance, 10)
-        )
-        reciprocal_ranks.append(
-            reciprocal_rank(relevance)
-        )
-        ndcg_scores.append(
-            ndcg_at_k(relevance, 10)
-        )
+        hit_5_scores.append(hit_at_k(relevance, 5))
+        hit_10_scores.append(hit_at_k(relevance, 10))
+        reciprocal_ranks.append(reciprocal_rank(relevance))
+        ndcg_scores.append(ndcg_at_k(relevance, 10))
         latencies.append(latency_ms)
 
     metrics = {
@@ -218,9 +185,7 @@ def main() -> None:
 
     encoder = EmbeddingEncoder()
 
-    qdrant_client = QdrantClient(
-        path="data/qdrant"
-    )
+    qdrant_client = QdrantClient(path="data/qdrant")
 
     dense_index = DenseVectorIndex(
         path=Path("data/qdrant"),
@@ -238,30 +203,23 @@ def main() -> None:
         index=dense_index,
     )
 
-    bm25_index = BM25Index()
-    bm25_index.build(chunks=chunks)
-
-    bm25 = BM25Retriever(
-        index=bm25_index,
-    )
+    bm25 = BM25Index(chunks)
 
     hybrid = HybridRetriever(
-        dense_retriever=dense,
-        sparse_retriever=bm25,
+        dense=dense,
+        sparse=bm25,
         rrf_k=20,
     )
 
-    reranker = CrossEncoderReRanker()
+    reranker = CrossEncoderReranker()
 
     hybrid_ce = RerankedRetriever(
-        base_retriever=hybrid,
+        base=hybrid,
         reranker=reranker,
         candidate_k=20,
     )
 
-    queries = load_evaluation_dataset(
-        Path("data/eval/retrieval_v1.json")
-    )
+    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
 
     print(f"Evaluation queries: {len(queries)}")
 
@@ -270,13 +228,7 @@ def main() -> None:
         chunks,
     )
 
-    print(
-        "Ground truth validated: "
-        f"{len(ground_truth)}/{len(queries)}"
-    )
-
-    profiler = QueryProfiler()
-    router = RuleBasedRouter()
+    print(f"Ground truth validated: {len(ground_truth)}/{len(queries)}")
 
     adaptive_retrievers = {
         RetrievalRoute.CHEAP: bm25,
@@ -304,8 +256,6 @@ def main() -> None:
 
     adaptive_result, route_counts = evaluate_adaptive(
         queries=queries,
-        profiler=profiler,
-        router=router,
         retrievers=adaptive_retrievers,
     )
 
@@ -319,17 +269,9 @@ def main() -> None:
 
     for route in RetrievalRoute:
         count = route_counts[route]
-        percentage = (
-            count / total_queries * 100
-            if total_queries
-            else 0.0
-        )
+        percentage = count / total_queries * 100 if total_queries else 0.0
 
-        print(
-            f"{route.value:<10}"
-            f"{count:>4} "
-            f"({percentage:>5.1f}%)"
-        )
+        print(f"{route.value:<10}{count:>4} ({percentage:>5.1f}%)")
 
     qdrant_client.close()
 

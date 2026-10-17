@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
+from astrarag.documents import parse_pdf
 from astrarag.embedding import EmbeddingEncoder
-from astrarag.index import DenseVectorIndex
-from astrarag.ingestion import ParentChildChunker, PDFParser
+from astrarag.experiments import chunk_parent_child
+from astrarag.indexes import DenseVectorIndex
 
 RAW_DIR = Path("data/documents")
 QDRANT_PATH = Path("data/qdrant")
@@ -17,14 +18,6 @@ CHILD_OVERLAP = 100
 
 
 def main() -> None:
-    parser = PDFParser()
-
-    chunker = ParentChildChunker(
-        parent_size=PARENT_SIZE,
-        child_size=CHILD_SIZE,
-        child_overlap=CHILD_OVERLAP,
-    )
-
     encoder = EmbeddingEncoder()
 
     index = DenseVectorIndex(
@@ -42,26 +35,23 @@ def main() -> None:
     parent_count = 0
 
     for pdf_path in pdf_paths:
-        document = parser.parse(pdf_path)
-
-        parents, children = chunker.chunk(document)
+        document = parse_pdf(pdf_path)
+        parents, children = chunk_parent_child(
+            document,
+            parent_size=PARENT_SIZE,
+            child_size=CHILD_SIZE,
+            child_overlap=CHILD_OVERLAP,
+        )
 
         parent_count += len(parents)
         all_children.extend(children)
 
-        print(
-            f"{pdf_path.name}: "
-            f"{len(parents)} parents, "
-            f"{len(children)} children"
-        )
+        print(f"{pdf_path.name}: {len(parents)} parents, {len(children)} children")
 
     print(f"\nParents: {parent_count}")
     print(f"Children: {len(all_children)}")
 
-    texts = [
-        child.text
-        for child in all_children
-    ]
+    texts = [child.text for child in all_children]
 
     embeddings = encoder.encode(texts)
 
@@ -70,10 +60,7 @@ def main() -> None:
         embeddings=embeddings,
     )
 
-    print(
-        f"Indexed {len(all_children)} child chunks "
-        f"into '{COLLECTION_NAME}'"
-    )
+    print(f"Indexed {len(all_children)} child chunks into '{COLLECTION_NAME}'")
 
 
 if __name__ == "__main__":

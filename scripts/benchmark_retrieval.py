@@ -8,18 +8,17 @@ from time import perf_counter
 from qdrant_client import QdrantClient
 
 from astrarag.embedding import EmbeddingEncoder
-from astrarag.evaluation import load_evaluation_dataset
-from astrarag.evaluation.ground_truth import (
+from astrarag.evaluation import (
     is_relevant_result,
+    load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.index import BM25Index, DenseVectorIndex
-from astrarag.reranking import CrossEncoderReRanker
+from astrarag.experiments import ParentChildRetriever
+from astrarag.indexes import BM25Index, DenseVectorIndex
 from astrarag.retrieval import (
-    BM25Retriever,
+    CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
-    ParentChildRetriever,
     RerankedRetriever,
 )
 
@@ -68,10 +67,7 @@ def ndcg_from_relevance(
 
     ideal_count = min(relevant_count, k)
 
-    idcg = sum(
-        1.0 / math.log2(rank + 1)
-        for rank in range(1, ideal_count + 1)
-    )
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
 
     return dcg / idcg
 
@@ -90,17 +86,14 @@ def evaluate(
     for query in queries:
         start = perf_counter()
 
-        results = retriever.retriever(
+        results = retriever.retrieve(
             query=query.query,
             top_k=TOP_K,
         )
 
         latency_ms = (perf_counter() - start) * 1000
 
-        relevance = [
-            is_relevant_result(result, query)
-            for result in results
-        ]
+        relevance = [is_relevant_result(result, query) for result in results]
 
         hit_5_scores.append(
             hit_at_k(
@@ -116,9 +109,7 @@ def evaluate(
             )
         )
 
-        rr_scores.append(
-            reciprocal_rank_from_relevance(relevance)
-        )
+        rr_scores.append(reciprocal_rank_from_relevance(relevance))
 
         ndcg_scores.append(
             ndcg_from_relevance(
@@ -142,15 +133,13 @@ def evaluate(
 def main() -> None:
     encoder = EmbeddingEncoder()
 
-    qdrant_client = QdrantClient(
-            path="data/qdrant"
-    )
+    qdrant_client = QdrantClient(path="data/qdrant")
 
     dense_index = DenseVectorIndex(
         path=Path("data/qdrant"),
         collection_name="astrarag-corpus",
         dimension=encoder.dimension,
-        client=qdrant_client
+        client=qdrant_client,
     )
 
     chunks = dense_index.get_chunks()
@@ -162,22 +151,17 @@ def main() -> None:
         index=dense_index,
     )
 
-    bm25_index = BM25Index()
-    bm25_index.build(chunks)
-
-    bm25 = BM25Retriever(
-        index=bm25_index,
-    )
+    bm25 = BM25Index(chunks)
 
     hybrid = HybridRetriever(
-        dense_retriever=dense,
-        sparse_retriever=bm25,
+        dense=dense,
+        sparse=bm25,
     )
 
-    reranker = CrossEncoderReRanker()
+    reranker = CrossEncoderReranker()
 
     hybrid_reranked = RerankedRetriever(
-        base_retriever=hybrid,
+        base=hybrid,
         reranker=reranker,
         candidate_k=20,
     )
@@ -186,7 +170,7 @@ def main() -> None:
         path=Path("data/qdrant"),
         collection_name="astrarag-parent-child",
         dimension=encoder.dimension,
-        client=qdrant_client
+        client=qdrant_client,
     )
 
     parent_child_dense = DenseRetriever(
@@ -199,9 +183,7 @@ def main() -> None:
         candidate_k=20,
     )
 
-    queries = load_evaluation_dataset(
-        Path("data/eval/retrieval_v1.json")
-    )
+    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
 
     print(f"Evaluation queries: {len(queries)}")
     print("Validating evaluation ground truth...")
@@ -211,10 +193,7 @@ def main() -> None:
         chunks=chunks,
     )
 
-    print(
-        f"Ground truth validated: "
-        f"{len(ground_truth)}/{len(queries)} queries"
-    )
+    print(f"Ground truth validated: {len(ground_truth)}/{len(queries)} queries")
 
     experiments = [
         ("Dense", dense),
@@ -260,8 +239,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
-    
+
+
 """
 Aynen öyle, router genişletme işi proje sonunda yapmak daha doğru olacak. burada bi daha çok retrievel eklemeye kalkalrsak işin içinden çıkamayız. 
 """

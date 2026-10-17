@@ -5,9 +5,7 @@ from astrarag import AstraRAG
 
 def main() -> None:
     with AstraRAG() as rag:
-        result = rag.query(
-            "What is the main idea behind Sentence-BERT?"
-        )
+        result = rag.query("What is the main idea behind Sentence-BERT?")
 
         print("\nAnswer:")
         print(result.generation.answer)
@@ -23,10 +21,7 @@ def main() -> None:
 
         print("\nSources:")
         for item in result.context.items:
-            print(
-                f"- {item.document_id} "
-                f"{item.page_numbers}"
-            )
+            print(f"- {item.document_id} {item.page_numbers}")
 
 
 if __name__ == "__main__":

@@ -6,15 +6,17 @@ from qdrant_client import QdrantClient
 
 from astrarag.config import Settings
 from astrarag.embedding import EmbeddingEncoder
-from astrarag.index import DenseVectorIndex
-from astrarag.retrieval import (
-    DenseRetriever,
+from astrarag.experiments import (
     GeminiQueryTransformer,
     HyDERetriever,
     MultiQueryRetriever,
 )
+from astrarag.indexes import DenseVectorIndex
+from astrarag.retrieval import DenseRetriever
 
 settings = Settings()
+if not settings.gemini_api_key:
+    raise RuntimeError("GEMINI_API_KEY is required for this experiment")
 encoder = EmbeddingEncoder()
 
 client = QdrantClient(path="data/qdrant")
@@ -37,7 +39,7 @@ transformer = GeminiQueryTransformer(
 )
 
 multi = MultiQueryRetriever(
-    base_retriever=dense,
+    base=dense,
     transformer=transformer,
 )
 
@@ -50,11 +52,11 @@ hyde = HyDERetriever(
 query = "What is the main idea behind Sentence-BERT?"
 try:
     print("MULTI QUERY")
-    for result in multi.retriever(query, top_k=5):
+    for result in multi.retrieve(query, top_k=5):
         print(result.score, result.document_id)
 
     print("\nHYDE")
-    for result in hyde.retriever(query, top_k=5):
+    for result in hyde.retrieve(query, top_k=5):
         print(result.score, result.document_id)
 
 finally:

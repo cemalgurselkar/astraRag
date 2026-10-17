@@ -1,6 +1,7 @@
 """Compare context builders on evidence coverage, redundancy, size, and latency."""
 
 import re
+from functools import partial
 from pathlib import Path
 from statistics import mean
 from time import perf_counter
@@ -8,11 +9,11 @@ from time import perf_counter
 import numpy as np
 from qdrant_client import QdrantClient
 
-from astrarag.context import ClusteredContextEngine, ContextEngine, MMRContextEngine
+from astrarag.context import build_context
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import load_evaluation_dataset
-from astrarag.index import BM25Index, DenseVectorIndex
-from astrarag.retrieval import BM25Retriever
+from astrarag.experiments import build_clustered_context, build_mmr_context
+from astrarag.indexes import BM25Index, DenseVectorIndex
 
 TOP_N = 20
 MAX_CHAR = 12_000
@@ -39,8 +40,7 @@ def evidence_metrics(context, query) -> tuple[float, float]:
     context_text = normalize(context.text)
 
     matched = sum(
-        normalize(evidence.text) in context_text
-        for evidence in query.evidence
+        normalize(evidence.text) in context_text for evidence in query.evidence
     )
 
     total = len(query.evidence)
@@ -72,9 +72,7 @@ def semantic_redundancy_metrics(
         return 0.0, 0.0
 
     embeddings = np.asarray(
-        encoder.encode(
-            [item.text for item in context.items]
-        ),
+        encoder.encode([item.text for item in context.items]),
         dtype=np.float32,
     )
 
@@ -90,15 +88,9 @@ def semantic_redundancy_metrics(
     if len(pairwise) == 0:
         return 0.0, 0.0
 
-    mean_similarity = float(
-        np.mean(pairwise)
-    )
+    mean_similarity = float(np.mean(pairwise))
 
-    redundant_pair_rate = float(
-        np.mean(
-            pairwise >= REDUNDANCY_THRESHOLD
-        )
-    )
+    redundant_pair_rate = float(np.mean(pairwise >= REDUNDANCY_THRESHOLD))
 
     return (
         mean_similarity,
@@ -120,7 +112,7 @@ def percentile_95(values: list[float]) -> float:
 
 def evaluate_context(
     name,
-    engine,
+    builder,
     retrieved_queries,
     encoder,
 ):
@@ -140,22 +132,14 @@ def evaluate_context(
     for query, retrieval_results in retrieved_queries:
         start = perf_counter()
 
-        context = engine.build(
-            retrieval_results
-        )
+        context = builder(retrieval_results)
 
-        latency_ms = (
-            perf_counter() - start
-        ) * 1000
+        latency_ms = (perf_counter() - start) * 1000
 
         item_count = len(context.items)
 
         if retrieval_results:
-            compression_ratio = (
-                1.0
-                - item_count
-                / len(retrieval_results)
-            )
+            compression_ratio = 1.0 - item_count / len(retrieval_results)
         else:
             compression_ratio = 0.0
 
@@ -175,72 +159,40 @@ def evaluate_context(
             query,
         )
 
-        item_counts.append(
-            item_count
-        )
+        item_counts.append(item_count)
 
-        char_counts.append(
-            context.total_characters
-        )
+        char_counts.append(context.total_characters)
 
-        mean_similarities.append(
-            mean_similarity
-        )
+        mean_similarities.append(mean_similarity)
 
-        redundant_pair_rates.append(
-            redundant_pair_rate
-        )
+        redundant_pair_rates.append(redundant_pair_rate)
 
-        evidence_coverages.append(
-            evidence_coverage
-        )
+        evidence_coverages.append(evidence_coverage)
 
-        evidence_ratios.append(
-            evidence_ratio
-        )
+        evidence_ratios.append(evidence_ratio)
 
-        compression_ratios.append(
-            compression_ratio
-        )
+        compression_ratios.append(compression_ratio)
 
-        latencies.append(
-            latency_ms
-        )
+        latencies.append(latency_ms)
 
     return {
         "name": name,
         "items": mean(item_counts),
         "chars": mean(char_counts),
-        "mean_similarity": mean(
-            mean_similarities
-        ),
-        "redundant_pair_rate": mean(
-            redundant_pair_rates
-        ),
-        "evidence_coverage": mean(
-            evidence_coverages
-        ),
-        "evidence_ratio": mean(
-            evidence_ratios
-        ),
-        "compression_ratio": mean(
-            compression_ratios
-        ),
-        "avg_latency_ms": mean(
-            latencies
-        ),
-        "p95_latency_ms": percentile_95(
-            latencies
-        ),
+        "mean_similarity": mean(mean_similarities),
+        "redundant_pair_rate": mean(redundant_pair_rates),
+        "evidence_coverage": mean(evidence_coverages),
+        "evidence_ratio": mean(evidence_ratios),
+        "compression_ratio": mean(compression_ratios),
+        "avg_latency_ms": mean(latencies),
+        "p95_latency_ms": percentile_95(latencies),
     }
 
 
 def main() -> None:
     encoder = EmbeddingEncoder()
 
-    qdrant_client = QdrantClient(
-        path="data/qdrant"
-    )
+    qdrant_client = QdrantClient(path="data/qdrant")
 
     try:
         dense_index = DenseVectorIndex(
@@ -252,26 +204,13 @@ def main() -> None:
 
         chunks = dense_index.get_chunks()
 
-        print(
-            f"Benchmark corpus: {len(chunks)} chunks"
-        )
+        print(f"Benchmark corpus: {len(chunks)} chunks")
 
-        bm25_index = BM25Index()
-        bm25_index.build(chunks)
+        bm25 = BM25Index(chunks)
 
-        bm25 = BM25Retriever(
-            index=bm25_index,
-        )
+        queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
 
-        queries = load_evaluation_dataset(
-            Path(
-                "data/eval/retrieval_v1.json"
-            )
-        )
-
-        print(
-            f"Evaluation queries: {len(queries)}"
-        )
+        print(f"Evaluation queries: {len(queries)}")
 
         # --------------------------------------------------
         # Fixed retrieval
@@ -281,14 +220,12 @@ def main() -> None:
         # candidate chunks.
         # --------------------------------------------------
 
-        print(
-            f"Retrieving fixed Top-{TOP_N} candidate sets..."
-        )
+        print(f"Retrieving fixed Top-{TOP_N} candidate sets...")
 
         retrieved_queries = []
 
         for query in queries:
-            retrieval_results = bm25.retriever(
+            retrieval_results = bm25.retrieve(
                 query=query.query,
                 top_k=TOP_N,
             )
@@ -303,8 +240,9 @@ def main() -> None:
         experiments = [
             (
                 "Baseline",
-                ContextEngine(
-                    max_char=MAX_CHAR,
+                partial(
+                    build_context,
+                    max_characters=MAX_CHAR,
                     max_items=MAX_ITEMS,
                 ),
             )
@@ -314,22 +252,24 @@ def main() -> None:
             experiments.append(
                 (
                     f"Cluster {threshold:.2f}",
-                    ClusteredContextEngine(
+                    partial(
+                        build_clustered_context,
                         encoder=encoder,
-                        max_char=MAX_CHAR,
+                        max_characters=MAX_CHAR,
                         max_items=MAX_ITEMS,
                         similarity_threshold=threshold,
                     ),
                 )
             )
-        
+
         for lambda_mult in MMR_LAMBDAS:
             experiments.append(
                 (
                     f"MMR {lambda_mult:.2f}",
-                    MMRContextEngine(
+                    partial(
+                        build_mmr_context,
                         encoder=encoder,
-                        max_char=MAX_CHAR,
+                        max_characters=MAX_CHAR,
                         max_items=MAX_ITEMS,
                         lambda_mult=lambda_mult,
                     ),
@@ -339,13 +279,12 @@ def main() -> None:
         results = [
             evaluate_context(
                 name=name,
-                engine=engine,
+                builder=builder,
                 retrieved_queries=retrieved_queries,
                 encoder=encoder,
             )
-            for name, engine in experiments
+            for name, builder in experiments
         ]
-
 
         print()
         print("Context Benchmark")

@@ -250,8 +250,12 @@ Failed and neutral experiments are retained rather than presented as improvement
 ## Tests
 
 ```bash
-uv run pytest test/unit -v
+uv run pytest
 ```
+
+The test suite is split into `test/white_box` component tests and
+`test/black_box` CLI/HTTP boundary tests. Slow local-model tests require
+`RUN_SLOW_TESTS=1`; live external-service tests remain opt-in.
 
 Lint:
 

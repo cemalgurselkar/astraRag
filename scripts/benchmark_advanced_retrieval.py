@@ -9,26 +9,20 @@ from time import perf_counter
 from qdrant_client import QdrantClient
 
 from astrarag.embedding import EmbeddingEncoder
-from astrarag.evaluation import load_evaluation_dataset
-from astrarag.evaluation.ground_truth import (
+from astrarag.evaluation import (
     is_relevant_result,
+    load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.index import BM25Index, DenseVectorIndex
-from astrarag.retrieval import (
-    BM25Retriever,
-    DenseRetriever,
-    HybridRetriever,
-)
-from astrarag.schemas import RetrievalResult
+from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.models import RetrievalResult
+from astrarag.retrieval import DenseRetriever, HybridRetriever
 
 TOP_K = 10
 CANDIDATE_K = 20
 RRF_K = 60
 
-TRANSFORMATIONS_PATH = Path(
-    "data/eval/query_transformations.json"
-)
+TRANSFORMATIONS_PATH = Path("data/eval/query_transformations.json")
 
 
 def hit_at_k(
@@ -101,9 +95,8 @@ def fuse_rrf(
         ):
             results_by_id[result.chunk_id] = result
 
-            scores[result.chunk_id] = (
-                scores.get(result.chunk_id, 0.0)
-                + 1.0 / (RRF_K + rank)
+            scores[result.chunk_id] = scores.get(result.chunk_id, 0.0) + 1.0 / (
+                RRF_K + rank
             )
 
     ranked_ids = sorted(
@@ -138,9 +131,7 @@ def evaluate(
 
         results = retrieve(query)
 
-        latency_ms = (
-            perf_counter() - start
-        ) * 1000
+        latency_ms = (perf_counter() - start) * 1000
 
         relevance = [
             is_relevant_result(
@@ -150,25 +141,15 @@ def evaluate(
             for result in results
         ]
 
-        hit5.append(
-            hit_at_k(relevance, 5)
-        )
+        hit5.append(hit_at_k(relevance, 5))
 
-        hit10.append(
-            hit_at_k(relevance, 10)
-        )
+        hit10.append(hit_at_k(relevance, 10))
 
-        rr.append(
-            reciprocal_rank(relevance)
-        )
+        rr.append(reciprocal_rank(relevance))
 
-        ndcg10.append(
-            ndcg(relevance, 10)
-        )
+        ndcg10.append(ndcg(relevance, 10))
 
-        latencies.append(
-            latency_ms
-        )
+        latencies.append(latency_ms)
 
     return {
         "name": name,
@@ -183,30 +164,16 @@ def evaluate(
 def main() -> None:
     encoder = EmbeddingEncoder()
 
-    queries = load_evaluation_dataset(
-        Path("data/eval/retrieval_v1.json")
-    )
+    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
 
-    transformations_data = json.loads(
-        TRANSFORMATIONS_PATH.read_text(
-            encoding="utf-8"
-        )
-    )
+    transformations_data = json.loads(TRANSFORMATIONS_PATH.read_text(encoding="utf-8"))
 
-    transformations = {
-        item["query_id"]: item
-        for item in transformations_data
-    }
+    transformations = {item["query_id"]: item for item in transformations_data}
 
     if len(transformations) != len(queries):
-        raise RuntimeError(
-            "Transformation cache does not match "
-            "evaluation dataset."
-        )
+        raise RuntimeError("Transformation cache does not match evaluation dataset.")
 
-    client = QdrantClient(
-        path="data/qdrant"
-    )
+    client = QdrantClient(path="data/qdrant")
 
     try:
         dense_index = DenseVectorIndex(
@@ -218,12 +185,8 @@ def main() -> None:
 
         chunks = dense_index.get_chunks()
 
-        print(
-            f"Benchmark corpus: {len(chunks)} chunks"
-        )
-        print(
-            f"Evaluation queries: {len(queries)}"
-        )
+        print(f"Benchmark corpus: {len(chunks)} chunks")
+        print(f"Evaluation queries: {len(queries)}")
 
         resolve_dataset_ground_truth(
             queries=queries,
@@ -235,34 +198,27 @@ def main() -> None:
             index=dense_index,
         )
 
-        bm25_index = BM25Index()
-        bm25_index.build(chunks)
-
-        bm25 = BM25Retriever(
-            index=bm25_index,
-        )
+        bm25 = BM25Index(chunks)
 
         hybrid = HybridRetriever(
-            dense_retriever=dense,
-            sparse_retriever=bm25,
+            dense=dense,
+            sparse=bm25,
         )
 
         def dense_baseline(query):
-            return dense.retriever(
+            return dense.retrieve(
                 query=query.query,
                 top_k=TOP_K,
             )
 
         def hybrid_baseline(query):
-            return hybrid.retriever(
+            return hybrid.retrieve(
                 query=query.query,
                 top_k=TOP_K,
             )
 
         def multi_query_dense(query):
-            cached = transformations[
-                query.id
-            ]
+            cached = transformations[query.id]
 
             search_queries = [
                 query.query,
@@ -270,7 +226,7 @@ def main() -> None:
             ]
 
             result_sets = [
-                dense.retriever(
+                dense.retrieve(
                     query=search_query,
                     top_k=CANDIDATE_K,
                 )
@@ -283,9 +239,7 @@ def main() -> None:
             )
 
         def multi_query_hybrid(query):
-            cached = transformations[
-                query.id
-            ]
+            cached = transformations[query.id]
 
             search_queries = [
                 query.query,
@@ -293,10 +247,9 @@ def main() -> None:
             ]
 
             result_sets = [
-                hybrid.retriever(
+                hybrid.retrieve(
                     query=search_query,
                     top_k=CANDIDATE_K,
-                    candidate_k=CANDIDATE_K,
                 )
                 for search_query in search_queries
             ]
@@ -307,17 +260,11 @@ def main() -> None:
             )
 
         def hyde_dense(query):
-            cached = transformations[
-                query.id
-            ]
+            cached = transformations[query.id]
 
-            hypothetical_document = (
-                cached["hyde_document"]
-            )
+            hypothetical_document = cached["hyde_document"]
 
-            vector = encoder.encode_query(
-                hypothetical_document
-            )
+            vector = encoder.encode_query(hypothetical_document)
 
             return dense_index.search(
                 query_vector=vector,
@@ -357,8 +304,7 @@ def main() -> None:
         ]
 
         transformation_latency = mean(
-            item["transformation_latency_ms"]
-            for item in transformations_data
+            item["transformation_latency_ms"] for item in transformations_data
         )
 
         print()
@@ -392,10 +338,7 @@ def main() -> None:
             f"{transformation_latency:.2f} ms/query"
         )
 
-        print(
-            "(Transformation latency is NOT included in "
-            "retrieval latency above.)"
-        )
+        print("(Transformation latency is NOT included in retrieval latency above.)")
 
     finally:
         client.close()

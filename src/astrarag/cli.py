@@ -63,18 +63,17 @@ def main() -> None:
 
 def run_index(path: Path) -> None:
     from astrarag.config import Settings
-    from astrarag.ingestion import CorpusIndexer
+    from astrarag.indexing import index_directory
 
     settings = Settings()
 
-    indexer = CorpusIndexer(
-        qdrant_path=settings.qdrant_path,
-        embedding_model_path=settings.embedding_model_path,
-        collection_name=settings.qdrant_collection,
-    )
-
     try:
-        document_count = indexer.index_directory(path)
+        document_count = index_directory(
+            path,
+            qdrant_path=settings.qdrant_path,
+            embedding_model_path=settings.embedding_model_path,
+            collection_name=settings.qdrant_collection,
+        )
     except (
         FileNotFoundError,
         NotADirectoryError,

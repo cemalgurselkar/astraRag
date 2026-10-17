@@ -1,13 +1,15 @@
 """Exercise Gemini answer generation with a small synthetic retrieval context."""
 
 from astrarag.config import Settings
-from astrarag.context import ContextEngine
+from astrarag.context import build_context
 from astrarag.generation import GeminiGenerator
-from astrarag.schemas import RetrievalResult
+from astrarag.models import RetrievalResult
 
 
 def main() -> None:
     settings = Settings()
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY is required for this smoke test")
 
     results = [
         RetrievalResult(
@@ -26,8 +28,7 @@ def main() -> None:
         )
     ]
 
-    context_engine = ContextEngine()
-    context = context_engine.build(results)
+    context = build_context(results)
 
     generator = GeminiGenerator(
         api_key=settings.gemini_api_key,
@@ -36,10 +37,7 @@ def main() -> None:
 
     try:
         answer = generator.generate(
-            query=(
-                "What does the Transformer rely on "
-                "instead of recurrence?"
-            ),
+            query=("What does the Transformer rely on instead of recurrence?"),
             context=context,
         )
 
