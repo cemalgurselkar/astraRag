@@ -30,12 +30,44 @@ def test_cli_help_lists_public_commands() -> None:
     assert "evaluate" in result.stdout
 
 
+def test_index_help_documents_the_path_argument() -> None:
+    result = run_cli("index", "--help")
+
+    assert result.returncode == 0
+    assert "PDF directory" in result.stdout
+
+
+def test_unknown_commands_fail() -> None:
+    result = run_cli("explode")
+
+    assert result.returncode != 0
+    assert "invalid choice" in result.stderr
+
+
+def test_index_without_a_path_uses_the_default_document_directory(
+    tmp_path: Path,
+) -> None:
+    result = run_cli("index", cwd=tmp_path)
+
+    assert result.returncode != 0
+    assert "Document directory does not exist" in result.stderr
+
+
 def test_index_reports_a_missing_directory(tmp_path: Path) -> None:
     missing = tmp_path / "missing"
     result = run_cli("index", str(missing), cwd=tmp_path)
 
     assert result.returncode != 0
     assert "Document directory does not exist" in result.stderr
+
+
+def test_index_rejects_a_file_instead_of_a_directory(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4 stub")
+    result = run_cli("index", str(pdf_path), cwd=tmp_path)
+
+    assert result.returncode != 0
+    assert "Expected a directory" in result.stderr
 
 
 def test_index_reports_an_empty_directory(tmp_path: Path) -> None:
@@ -45,3 +77,15 @@ def test_index_reports_an_empty_directory(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "No PDF documents found" in result.stderr
+
+
+def test_evaluate_reports_the_dataset_and_exits_successfully(
+    tmp_path: Path,
+) -> None:
+    """Pins the current evaluate contract until the command is implemented."""
+    dataset = tmp_path / "evaluation.json"
+    dataset.write_text("[]", encoding="utf-8")
+    result = run_cli("evaluate", str(dataset), cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert "Evaluation dataset:" in result.stdout

@@ -40,6 +40,15 @@ def _index_files(
     embedding_model_path: Path,
     collection_name: str,
 ) -> None:
+    chunks = []
+    for pdf_path in files:
+        document_chunks = chunk_document(parse_pdf(pdf_path))
+        chunks.extend(document_chunks)
+        print(f"{pdf_path.name}: {len(document_chunks)} chunks")
+
+    if not chunks:
+        raise RuntimeError("No chunks were produced from the supplied documents")
+
     from qdrant_client import QdrantClient
 
     from astrarag.embedding import EmbeddingEncoder
@@ -55,15 +64,6 @@ def _index_files(
             dimension=encoder.dimension,
             client=client,
         )
-        chunks = []
-        for pdf_path in files:
-            document_chunks = chunk_document(parse_pdf(pdf_path))
-            chunks.extend(document_chunks)
-            print(f"{pdf_path.name}: {len(document_chunks)} chunks")
-
-        if not chunks:
-            raise RuntimeError("No chunks were produced from the supplied documents")
-
         embeddings = encoder.encode([chunk.text for chunk in chunks])
         index.add(chunks, embeddings)
         print(f"Indexed {len(chunks)} chunks into '{collection_name}'.")

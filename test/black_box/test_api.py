@@ -1,100 +1,17 @@
 """Exercise the API through a real HTTP server process."""
 
-import json
-import socket
-import subprocess
-import sys
-import time
-from collections.abc import Iterator
-from contextlib import contextmanager
+import os
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 import pytest
 
-from test.black_box.fake_app import app
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
-def _local_sockets_available() -> bool:
-    try:
-        with socket.socket():
-            return True
-    except OSError:
-        return False
-
-
-@contextmanager
-def running_server() -> Iterator[str]:
-    port = _free_port()
-    process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "test.black_box.fake_app:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--log-level",
-            "warning",
-        ],
-        cwd=PROJECT_ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    base_url = f"http://127.0.0.1:{port}"
-
-    try:
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                stdout, stderr = process.communicate()
-                raise RuntimeError(f"API failed to start:\n{stdout}\n{stderr}")
-            try:
-                with urlopen(f"{base_url}/health", timeout=0.5):
-                    break
-            except URLError:
-                time.sleep(0.1)
-        else:
-            raise TimeoutError("API did not become ready")
-
-        yield base_url
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-
-
-def request_json(
-    url: str,
-    *,
-    payload: dict[str, str] | None = None,
-) -> tuple[int, dict[str, object]]:
-    data = json.dumps(payload).encode() if payload is not None else None
-    request = Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urlopen(request, timeout=5) as response:
-            return response.status, json.loads(response.read())
-    except HTTPError as exc:
-        return exc.code, json.loads(exc.read())
+from astrarag.models import PipelineResult
+from test.black_box.fake_app import FakeRAG, app
+from test.black_box.server import (
+    EMBEDDING_MODEL,
+    request_json,
+    run_failing_server,
+)
 
 
 def test_openapi_exposes_the_public_routes() -> None:
@@ -105,40 +22,161 @@ def test_openapi_exposes_the_public_routes() -> None:
     assert schema["paths"]["/query"]["post"]["responses"]["200"]
 
 
-@pytest.mark.skipif(
-    not _local_sockets_available(),
-    reason="local socket binding is unavailable in this sandbox",
-)
-def test_http_contract() -> None:
-    with running_server() as base_url:
-        health = request_json(f"{base_url}/health")
-        success = request_json(
-            f"{base_url}/query",
-            payload={"query": "What is attention?"},
-        )
-        empty = request_json(f"{base_url}/query", payload={"query": ""})
-        invalid = request_json(f"{base_url}/query", payload={"query": "invalid"})
-        unavailable = request_json(
-            f"{base_url}/query", payload={"query": "unavailable"}
-        )
+def test_fake_runtime_matches_the_real_pipeline_contract() -> None:
+    result = FakeRAG().query("What is attention?")
 
-    assert health == (200, {"status": "ok"})
-    assert success == (
-        200,
-        {
-            "answer": "Grounded answer [SOURCE 1].",
-            "route": "cheap",
-            "sources": [
-                {
-                    "chunk_id": "chunk-1",
-                    "document_id": "document-1",
-                    "pages": [2],
-                }
-            ],
-            "retrieval_latency_ms": 1.25,
-            "total_latency_ms": 3.5,
-        },
+    assert isinstance(result, PipelineResult)
+
+
+def test_health_endpoint(api_server: str) -> None:
+    status, payload = request_json(f"{api_server}/health")
+
+    assert (status, payload) == (200, {"status": "ok"})
+
+
+def test_query_success_payload(api_server: str) -> None:
+    status, payload = request_json(
+        f"{api_server}/query",
+        payload={"query": "What is attention?"},
     )
-    assert empty[0] == 422
-    assert invalid == (400, {"detail": "invalid query"})
-    assert unavailable == (503, {"detail": "service unavailable"})
+
+    assert status == 200
+    assert set(payload) == {
+        "answer",
+        "route",
+        "sources",
+        "retrieval_latency_ms",
+        "total_latency_ms",
+    }
+    assert payload["answer"] == "Grounded answer [SOURCE 1]."
+    assert payload["route"] == "cheap"
+    assert payload["sources"] == [
+        {
+            "chunk_id": "chunk-1",
+            "document_id": "document-1",
+            "pages": [2],
+        }
+    ]
+    assert payload["retrieval_latency_ms"] == 1.25
+    assert payload["total_latency_ms"] == 3.5
+    assert payload["total_latency_ms"] >= payload["retrieval_latency_ms"]
+
+
+def test_query_preserves_source_order(api_server: str) -> None:
+    status, payload = request_json(
+        f"{api_server}/query",
+        payload={"query": "multi"},
+    )
+
+    assert status == 200
+    assert payload["route"] == "medium"
+    assert [source["chunk_id"] for source in payload["sources"]] == [
+        "chunk-1",
+        "chunk-2",
+        "chunk-3",
+    ]
+    assert [source["pages"] for source in payload["sources"]] == [
+        [2],
+        [3, 4],
+        [7],
+    ]
+
+
+def test_query_rejects_an_empty_string_with_422(api_server: str) -> None:
+    status, _ = request_json(
+        f"{api_server}/query",
+        payload={"query": ""},
+    )
+
+    assert status == 422
+
+
+def test_query_maps_a_whitespace_query_to_400(api_server: str) -> None:
+    status, payload = request_json(
+        f"{api_server}/query",
+        payload={"query": "   "},
+    )
+
+    assert status == 400
+    assert "query" in payload["detail"]
+
+
+def test_query_maps_value_errors_to_400(api_server: str) -> None:
+    status, payload = request_json(
+        f"{api_server}/query",
+        payload={"query": "invalid"},
+    )
+
+    assert (status, payload) == (400, {"detail": "invalid query"})
+
+
+def test_query_maps_runtime_errors_to_503(api_server: str) -> None:
+    status, payload = request_json(
+        f"{api_server}/query",
+        payload={"query": "unavailable"},
+    )
+
+    assert (status, payload) == (503, {"detail": "service unavailable"})
+
+
+def test_query_ignores_unknown_request_fields(api_server: str) -> None:
+    status, payload = request_json(
+        f"{api_server}/query",
+        payload={"query": "What is attention?", "unrelated": 42},
+    )
+
+    assert status == 200
+    assert payload["answer"] == "Grounded answer [SOURCE 1]."
+
+
+def test_query_rejects_a_missing_query_field(api_server: str) -> None:
+    status, _ = request_json(f"{api_server}/query", payload={})
+
+    assert status == 422
+
+
+def test_query_rejects_malformed_json(api_server: str) -> None:
+    status, _ = request_json(f"{api_server}/query", raw=b"{not json")
+
+    assert status == 422
+
+
+def test_unknown_route_returns_404(api_server: str) -> None:
+    status, payload = request_json(f"{api_server}/does-not-exist")
+
+    assert status == 404
+    assert "detail" in payload
+
+
+def test_query_rejects_get_method(api_server: str) -> None:
+    status, payload = request_json(f"{api_server}/query", method="GET")
+
+    assert status == 405
+    assert "detail" in payload
+
+
+def test_server_fails_without_a_gemini_key(tmp_path: Path) -> None:
+    result = run_failing_server("test.black_box.bootstrap_app:app", cwd=tmp_path)
+
+    assert result.returncode != 0, result.stdout
+    assert "GEMINI_API_KEY is required to start AstraRAG" in result.stderr
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    os.getenv("RUN_SLOW_TESTS") != "1" or not EMBEDDING_MODEL.exists(),
+    reason="set RUN_SLOW_TESTS=1 and install the local embedding model",
+)
+def test_server_fails_with_an_empty_corpus(tmp_path: Path) -> None:
+    result = run_failing_server(
+        "test.black_box.bootstrap_app:app",
+        environment={
+            "GEMINI_API_KEY": "startup-test-dummy-key",
+            "EMBEDDING_MODEL_PATH": str(EMBEDDING_MODEL),
+            "QDRANT_PATH": str(tmp_path / "qdrant"),
+        },
+        cwd=tmp_path,
+    )
+
+    assert result.returncode != 0, result.stdout
+    assert "corpus is empty" in result.stderr
