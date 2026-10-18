@@ -1,4 +1,12 @@
-"""Parse, clean, and chunk source documents."""
+"""Kaynak PDF'leri okur, metni temizler ve aranabilir parçalara böler.
+
+Sözlük:
+- `clean_text`: PDF çıkarımından kalan boşluk ve karakter bozukluklarını düzeltir.
+- `parse_pdf`: PDF sayfalarını doğrulanmış bir `Document` modeline dönüştürür.
+- `chunk_document`: Deneyler için karakter tabanlı parçalar üretir.
+- `chunk_document_by_tokens`: Production için tokenizer tabanlı parçalar üretir.
+- `_document_id`: Dosya içeriğinden kararlı belge kimliği oluşturur.
+"""
 
 import re
 import unicodedata
@@ -6,6 +14,7 @@ from hashlib import sha256
 from pathlib import Path
 
 import pymupdf
+from tokenizers import Tokenizer
 
 from astrarag.models import Chunk, Document, Page
 
@@ -101,5 +110,55 @@ def chunk_document(
             if end == len(page.text):
                 break
             start = end - overlap
+
+    return chunks
+
+
+def chunk_document_by_tokens(
+    document: Document,
+    tokenizer: Tokenizer,
+    chunk_size: int = 254,
+    overlap: int = 32,
+) -> list[Chunk]:
+    """Split pages on embedding-token boundaries without losing source offsets."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than 0")
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap must be between 0 and chunk_size")
+
+    chunks: list[Chunk] = []
+    chunk_index = 0
+    step = chunk_size - overlap
+
+    for page in document.pages:
+        offsets = tokenizer.encode(
+            page.text,
+            add_special_tokens=False,
+        ).offsets
+        for token_start in range(0, len(offsets), step):
+            token_end = min(token_start + chunk_size, len(offsets))
+            start_char = offsets[token_start][0]
+            end_char = offsets[token_end - 1][1]
+            text = page.text[start_char:end_char].strip()
+            if text:
+                chunks.append(
+                    Chunk(
+                        id=f"{document.id}:{chunk_index}",
+                        document_id=document.id,
+                        text=text,
+                        index=chunk_index,
+                        page_numbers=[page.number],
+                        metadata={
+                            **document.metadata,
+                            "start_char": start_char,
+                            "end_char": end_char,
+                            "start_token": token_start,
+                            "end_token": token_end,
+                        },
+                    )
+                )
+                chunk_index += 1
+            if token_end == len(offsets):
+                break
 
     return chunks

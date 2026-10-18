@@ -1,10 +1,12 @@
-"""Production retrieval strategies."""
+"""Production sorgularında kullanılan dense ve hibrit arama stratejilerini içerir.
 
-from collections.abc import Sequence
-from pathlib import Path
+Sözlük:
+- `Retriever`: Arama sınıflarının uyması gereken küçük protokol.
+- `DenseRetriever`: Sorgu embedding'iyle Qdrant üzerinde anlamsal arama yapar.
+- `HybridRetriever`: Dense ve BM25 sonuçlarını reciprocal-rank fusion ile birleştirir.
+"""
+
 from typing import Protocol
-
-from sentence_transformers import CrossEncoder
 
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.indexes import DenseVectorIndex
@@ -69,59 +71,3 @@ class HybridRetriever:
             results[chunk_id].model_copy(update={"score": scores[chunk_id]})
             for chunk_id in ranked_ids
         ]
-
-
-class CrossEncoderReranker:
-    """Own a local cross-encoder and score query-passage pairs."""
-
-    def __init__(
-        self,
-        model_name: str | Path = "models/ms-marco-MiniLM-L6-v2",
-    ) -> None:
-        self.model_name = model_name
-        self._model = CrossEncoder(str(model_name), local_files_only=True)
-
-    def rerank(
-        self,
-        query: str,
-        candidates: Sequence[RetrievalResult],
-        top_k: int = 10,
-    ) -> list[RetrievalResult]:
-        if top_k <= 0:
-            raise ValueError("top_k must be greater than 0")
-        if not candidates:
-            return []
-
-        scores = self._model.predict(
-            [(query, candidate.text) for candidate in candidates],
-            show_progress_bar=False,
-        )
-        ranked = sorted(
-            zip(candidates, scores, strict=True),
-            key=lambda item: float(item[1]),
-            reverse=True,
-        )
-        return [
-            candidate.model_copy(update={"score": float(score)})
-            for candidate, score in ranked[:top_k]
-        ]
-
-
-class RerankedRetriever:
-    def __init__(
-        self,
-        base: Retriever,
-        reranker: CrossEncoderReranker,
-        candidate_k: int = 20,
-    ) -> None:
-        if candidate_k <= 0:
-            raise ValueError("candidate_k must be greater than 0")
-        self.base = base
-        self.reranker = reranker
-        self.candidate_k = candidate_k
-
-    def retrieve(self, query: str, top_k: int = 10) -> list[RetrievalResult]:
-        if top_k <= 0:
-            raise ValueError("top_k must be greater than 0")
-        candidates = self.base.retrieve(query, max(self.candidate_k, top_k))
-        return self.reranker.rerank(query, candidates, top_k)

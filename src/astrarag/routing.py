@@ -1,4 +1,9 @@
-"""Profile queries and choose a retrieval route."""
+"""Sorgunun yapısını analiz eder ve uygun retrieval yolunu seçer.
+
+Sözlük:
+- `profile_query`: Uzunluk, sayı, karşılaştırma ve multi-hop sinyallerini çıkarır.
+- `choose_route`: Sorgu profiline göre BM25 veya hibrit retrieval seçer.
+"""
 
 import re
 
@@ -45,7 +50,7 @@ def profile_query(query: str) -> QueryProfile:
 
 def choose_route(profile: QueryProfile) -> RetrievalRoute:
     if profile.has_comparison or profile.has_multi_hop_signal:
-        return RetrievalRoute.EXPENSIVE
+        return RetrievalRoute.MEDIUM
     if profile.has_numbers or profile.has_exact_phrase or profile.word_count >= 12:
         return RetrievalRoute.MEDIUM
     return RetrievalRoute.CHEAP

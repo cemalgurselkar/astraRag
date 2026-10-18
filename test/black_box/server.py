@@ -15,7 +15,8 @@ from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-EMBEDDING_MODEL = PROJECT_ROOT / "models/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = PROJECT_ROOT / "models/all-minilm-l6-v2_f16.gguf"
+EMBEDDING_TOKENIZER = PROJECT_ROOT / "models/all-MiniLM-L6-v2/tokenizer.json"
 
 
 def free_port() -> int:

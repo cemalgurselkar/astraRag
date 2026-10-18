@@ -1,4 +1,11 @@
-"""Dense Qdrant and in-memory BM25 indexes."""
+"""Qdrant dense vektör indeksini ve bellek içi BM25 indeksini yönetir.
+
+Sözlük:
+- `create_qdrant_client`: Uzak Qdrant'a veya yerel geliştirme deposuna bağlanır.
+- `DenseVectorIndex`: Chunk embedding'lerini yazar, doğrular ve ANN araması yapar.
+- `BM25Index`: Chunk metinleri üzerinde sözcük tabanlı sparse arama yapar.
+- `_tokenize`: BM25 için metni basit terimlere ayırır.
+"""
 
 import re
 from collections.abc import Sequence
@@ -8,10 +15,27 @@ from uuid import NAMESPACE_URL, uuid5
 import numpy as np
 from numpy.typing import NDArray
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import PointStruct, SearchParams
 from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from astrarag.models import Chunk, RetrievalResult
+
+
+def create_qdrant_client(
+    *,
+    url: str | None,
+    path: Path,
+    api_key: str | None,
+    timeout: int,
+) -> QdrantClient:
+    """Connect to Qdrant server in production or local storage in development."""
+    if url:
+        return QdrantClient(
+            url=url,
+            api_key=api_key,
+            timeout=timeout,
+        )
+    return QdrantClient(path=str(path))
 
 
 class DenseVectorIndex:
@@ -22,6 +46,9 @@ class DenseVectorIndex:
         path: Path,
         collection_name: str,
         dimension: int,
+        hnsw_ef_search: int = 128,
+        expected_metadata: dict[str, object] | None = None,
+        validate_hnsw: bool = False,
         client: QdrantClient | None = None,
     ) -> None:
         if dimension <= 0:
@@ -29,13 +56,56 @@ class DenseVectorIndex:
 
         self.collection_name = collection_name
         self.dimension = dimension
+        self.hnsw_ef_search = hnsw_ef_search
         self._client = client or QdrantClient(path=str(path))
 
         if not self._client.collection_exists(collection_name=collection_name):
-            self._client.create_collection(
-                collection_name=collection_name,
-                vectors_config=VectorParams(size=dimension, distance=Distance.COSINE),
+            raise RuntimeError(
+                f"Qdrant collection '{collection_name}' does not exist. "
+                "Index documents before starting the application."
             )
+
+        collection = self._client.get_collection(collection_name)
+        vectors = collection.config.params.vectors
+        actual_dimension = getattr(vectors, "size", None)
+        if actual_dimension != dimension:
+            raise RuntimeError(
+                f"Qdrant collection '{collection_name}' has vector dimension "
+                f"{actual_dimension}; expected {dimension}. Rebuild the index."
+            )
+        metadata = collection.config.metadata or {}
+        if expected_metadata:
+            mismatches = {
+                key: (metadata.get(key), value)
+                for key, value in expected_metadata.items()
+                if metadata.get(key) != value
+            }
+            if mismatches:
+                details = ", ".join(
+                    f"{key}={actual!r} (expected {expected!r})"
+                    for key, (actual, expected) in mismatches.items()
+                )
+                raise RuntimeError(
+                    f"Qdrant collection '{collection_name}' is incompatible: "
+                    f"{details}. Rebuild the index."
+                )
+        if validate_hnsw and expected_metadata:
+            expected_m = expected_metadata["hnsw_m"]
+            expected_ef = expected_metadata["hnsw_ef_construct"]
+            expected_full_scan = expected_metadata["hnsw_full_scan_threshold_kb"]
+            expected_threshold = expected_metadata["hnsw_indexing_threshold_kb"]
+            hnsw = collection.config.hnsw_config
+            optimizer = collection.config.optimizer_config
+            if (
+                hnsw.m != expected_m
+                or hnsw.ef_construct != expected_ef
+                or hnsw.full_scan_threshold != expected_full_scan
+                or optimizer.indexing_threshold != expected_threshold
+            ):
+                raise RuntimeError(
+                    f"Qdrant collection '{collection_name}' has incompatible "
+                    "HNSW settings. Rebuild the index."
+                )
 
     def add(self, chunks: Sequence[Chunk], embeddings: NDArray[np.float32]) -> None:
         if len(chunks) != len(embeddings):
@@ -63,7 +133,11 @@ class DenseVectorIndex:
             )
             for chunk, embedding in zip(chunks, embeddings, strict=True)
         ]
-        self._client.upsert(collection_name=self.collection_name, points=points)
+        self._client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+            wait=True,
+        )
 
     def search(
         self,
@@ -83,6 +157,10 @@ class DenseVectorIndex:
         points = self._client.query_points(
             collection_name=self.collection_name,
             query=query_vector.tolist(),
+            search_params=SearchParams(
+                hnsw_ef=self.hnsw_ef_search,
+                exact=False,
+            ),
             limit=limit,
             with_payload=True,
         ).points

@@ -1,4 +1,8 @@
-"""Document chunking retained for parent-child retrieval experiments."""
+"""Parent-child retrieval deneyi için iki seviyeli belge parçaları üretir.
+
+Sözlük:
+- `chunk_parent_child`: Büyük parent parçaları ve onlara bağlı küçük child parçaları döndürür.
+"""
 
 from astrarag.models import Chunk, Document
 

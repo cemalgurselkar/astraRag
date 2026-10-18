@@ -12,16 +12,16 @@ def test_simple_query_routes_to_cheap() -> None:
     )
 
 
-def test_comparison_routes_to_expensive() -> None:
+def test_comparison_routes_to_medium() -> None:
     profile = profile_query("Compare BERT and Sentence-BERT.")
-    assert choose_route(profile) == RetrievalRoute.EXPENSIVE
+    assert choose_route(profile) == RetrievalRoute.MEDIUM
 
 
-def test_multi_hop_signal_routes_to_expensive() -> None:
+def test_multi_hop_signal_routes_to_medium() -> None:
     profile = profile_query(
         "What is the relationship between dense retrieval and reranking?"
     )
-    assert choose_route(profile) == RetrievalRoute.EXPENSIVE
+    assert choose_route(profile) == RetrievalRoute.MEDIUM
 
 
 def test_numeric_query_routes_to_medium() -> None:

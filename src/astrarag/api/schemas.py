@@ -1,4 +1,11 @@
-"""Define the request and response models exposed by the HTTP API."""
+"""HTTP API'nin doğrulanmış istek ve cevap modellerini tanımlar.
+
+Sözlük:
+- `QueryRequest`: Kullanıcının sorgu metni.
+- `SourceResponse`: Cevabı destekleyen belge parçası ve sayfaları.
+- `QueryResponse`: Cevap, route, kaynak ve gecikme bilgileri.
+- `HealthResponse`: Servis sağlık durumunu taşıyan cevap.
+"""
 
 from pydantic import BaseModel, Field
 

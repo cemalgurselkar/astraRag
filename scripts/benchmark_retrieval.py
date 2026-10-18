@@ -1,4 +1,4 @@
-"""Compare BM25, dense, hybrid, hierarchical, and reranked retrieval strategies."""
+"""Compare BM25, dense, hybrid, and hierarchical retrieval strategies."""
 
 import math
 from pathlib import Path
@@ -16,10 +16,8 @@ from astrarag.evaluation import (
 from astrarag.experiments import ParentChildRetriever
 from astrarag.indexes import BM25Index, DenseVectorIndex
 from astrarag.retrieval import (
-    CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
-    RerankedRetriever,
 )
 
 TOP_K = 10
@@ -158,14 +156,6 @@ def main() -> None:
         sparse=bm25,
     )
 
-    reranker = CrossEncoderReranker()
-
-    hybrid_reranked = RerankedRetriever(
-        base=hybrid,
-        reranker=reranker,
-        candidate_k=20,
-    )
-
     parent_child_index = DenseVectorIndex(
         path=Path("data/qdrant"),
         collection_name="astrarag-parent-child",
@@ -199,7 +189,6 @@ def main() -> None:
         ("Dense", dense),
         ("BM25", bm25),
         ("Hybrid RRF", hybrid),
-        ("Hybrid + CE", hybrid_reranked),
         ("Parent-Child", parent_child),
     ]
 

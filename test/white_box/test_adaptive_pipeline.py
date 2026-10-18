@@ -49,7 +49,6 @@ def build_pipeline() -> RAGPipeline:
         retrievers={
             RetrievalRoute.CHEAP: FakeRetriever("cheap"),
             RetrievalRoute.MEDIUM: FakeRetriever("medium"),
-            RetrievalRoute.EXPENSIVE: FakeRetriever("expensive"),
         },
         generator=FakeGenerator(),
     )
@@ -74,13 +73,13 @@ def test_pipeline_uses_medium_route() -> None:
     assert result.retrieval_results[0].chunk_id == "medium-chunk"
 
 
-def test_pipeline_uses_expensive_route() -> None:
+def test_pipeline_uses_hybrid_route_for_comparisons() -> None:
     pipeline = build_pipeline()
 
     result = pipeline.run("Compare BERT and Sentence-BERT.")
 
-    assert result.route == RetrievalRoute.EXPENSIVE
-    assert result.retrieval_results[0].chunk_id == "expensive-chunk"
+    assert result.route == RetrievalRoute.MEDIUM
+    assert result.retrieval_results[0].chunk_id == "medium-chunk"
 
 
 def test_pipeline_records_latency() -> None:

@@ -1,4 +1,11 @@
-"""Retrieval strategies that are not part of the production query path."""
+"""Production sorgu yoluna dahil olmayan deneysel retrieval stratejilerini içerir.
+
+Sözlük:
+- `ParentChildRetriever`: Child eşleşmelerinden daha geniş parent metinlerini getirir.
+- `GeminiQueryTransformer`: Sorgu varyasyonları ve varsayımsal cevap metni üretir.
+- `MultiQueryRetriever`: Birden fazla sorgunun sonuçlarını birleştirir.
+- `HyDERetriever`: Varsayımsal belge embedding'iyle dense arama yapar.
+"""
 
 from google import genai
 from google.genai import types

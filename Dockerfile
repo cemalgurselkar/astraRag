@@ -1,4 +1,4 @@
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 /uv /uvx /bin/
 
 COPY pyproject.toml uv.lock README.md ./
 
@@ -22,17 +22,14 @@ RUN uv sync \
     --frozen \
     --no-dev
 
-# Models are downloaded once while building the image.
-RUN uv run hf download \
+RUN uvx --from huggingface-hub hf download \
     sentence-transformers/all-MiniLM-L6-v2 \
+    tokenizer.json \
+    --revision 1110a243fdf4706b3f48f1d95db1a4f5529b4d41 \
     --local-dir /app/models/all-MiniLM-L6-v2
 
-RUN uv run hf download \
-    cross-encoder/ms-marco-MiniLM-L6-v2 \
-    --local-dir /app/models/ms-marco-MiniLM-L6-v2
 
-
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

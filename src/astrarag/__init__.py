@@ -1,4 +1,9 @@
-"""Expose the high-level AstraRAG application interface."""
+"""Paketin dışarıya sunduğu yüksek seviyeli AstraRAG arayüzünü tanımlar.
+
+Sözlük:
+- `AstraRAG`: Uygulamayı başlatan ve sorgu çalıştıran ana sınıf.
+- `__getattr__`: Döngüsel import oluşturmadan `AstraRAG` sınıfını geç yükler.
+"""
 
 from typing import TYPE_CHECKING, Any
 

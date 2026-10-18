@@ -1,4 +1,11 @@
-"""Serve AstraRAG health checks and queries through FastAPI."""
+"""AstraRAG sorgularını ve sağlık kontrolünü FastAPI üzerinden sunar.
+
+Sözlük:
+- `_create_rag`: Varsayılan `AstraRAG` çalışma nesnesini geç import ile oluşturur.
+- `create_app`: Yaşam döngüsü ve endpoint'leriyle FastAPI uygulamasını kurar.
+- `health`: Servisin ayakta olduğunu bildiren endpoint.
+- `query`: İsteği pipeline'a iletip HTTP cevap modeline dönüştüren endpoint.
+"""
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -26,9 +33,9 @@ def create_app(rag_factory: Callable[[], Any] = _create_rag) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         rag = rag_factory()
-        rag.start()
-        application.state.rag = rag
         try:
+            rag.start()
+            application.state.rag = rag
             yield
         finally:
             rag.close()

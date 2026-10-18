@@ -1,19 +1,37 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  embedding:
+    build:
+      context: .
+      dockerfile: Dockerfile.embedding
+    image: astrarag-embedding:all-minilm-l6-v2
+    restart: unless-stopped
+
   astrarag:
     build:
       context: .
       dockerfile: Dockerfile
 
     image: astrarag:0.1.0
-    container_name: astrarag
-
     ports:
       - "8000:8000"
-
     env_file:
       - .env
-
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_URL: http://embedding:8081
     volumes:
-      - ./data:/app/data
-
+      - ./data/documents:/app/data/documents:ro
+      - ./data/eval:/app/data/eval:ro
+    depends_on:
+      - qdrant
+      - embedding
     restart: unless-stopped
+
+volumes:
+  qdrant-data:

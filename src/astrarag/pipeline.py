@@ -1,4 +1,9 @@
-"""Run the query-to-answer pipeline."""
+"""Kullanıcı sorgusunu retrieval, context ve generation aşamalarından geçirir.
+
+Sözlük:
+- `Generator`: Cevap üreticilerinin uyması gereken küçük protokol.
+- `RAGPipeline`: Route seçer, kanıtları getirir ve nihai cevabı oluşturur.
+"""
 
 from time import perf_counter
 from typing import Protocol

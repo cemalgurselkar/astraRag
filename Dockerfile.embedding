@@ -1,0 +1,7 @@
+FROM ghcr.io/ggml-org/llama.cpp:server@sha256:4b7be0376002b4450a357a109bab804093ff9251193cc75ed4ce0cb39953ff5c
+
+ADD --checksum=sha256:7266519c8c9b860e99d561d2cb849cf546b248eb23bcb23787be5b11180daec3 \
+    https://huggingface.co/LLukas22/all-MiniLM-L6-v2-GGUF/resolve/ae6369f25f3393dcca54ff7b41157ffd2e43e2e6/all-minilm-l6-v2_f16.gguf \
+    /models/all-minilm-l6-v2_f16.gguf
+
+CMD ["-m", "/models/all-minilm-l6-v2_f16.gguf", "--embedding", "--pooling", "mean", "--embd-normalize", "2", "--host", "0.0.0.0", "--port", "8081", "--no-ui", "--metrics"]

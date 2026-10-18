@@ -1,4 +1,13 @@
-"""Evaluation dataset, ground-truth, and retrieval metric helpers."""
+"""Retrieval veri setini, ground-truth eşleşmesini ve kalite metriklerini yönetir.
+
+Sözlük:
+- `load_evaluation_dataset`: JSON değerlendirme sorgularını Pydantic ile doğrular.
+- `recall_at_k`, `reciprocal_rank`, `ndcg_at_k`: Sıralama kalitesi metrikleri.
+- `resolve_relevant_chunk_ids`: Kanıt metinlerini gerçek chunk kimlikleriyle eşleştirir.
+- `resolve_dataset_ground_truth`: Tüm veri setinin eşleşmelerini tek seferde çözer.
+- `is_relevant_result`: Bir retrieval sonucunun beklenen kanıtla uyuşmasını denetler.
+- `_normalize_text`: Metin eşleştirmesi için yazıyı standartlaştırır.
+"""
 
 import json
 import math

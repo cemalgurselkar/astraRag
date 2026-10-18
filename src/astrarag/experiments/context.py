@@ -1,4 +1,11 @@
-"""Context builders retained for benchmark experiments."""
+"""Benchmarklerde karşılaştırılan deneysel bağlam seçme yöntemlerini içerir.
+
+Sözlük:
+- `build_clustered_context`: Benzer sonuçları eleyerek temsilci parçalar seçer.
+- `build_mmr_context`: İlgi ve çeşitliliği MMR puanıyla dengeler.
+- `_package`: Seçilen sonuçları sınırlandırılmış `ContextPackage` haline getirir.
+- `_normalize_scores`: Puanları karşılaştırılabilir 0–1 aralığına taşır.
+"""
 
 from collections.abc import Sequence
 

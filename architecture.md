@@ -1,6 +1,6 @@
 # AstraRAG Mimari ve Kod Rehberi
 
-Bu belge projeye yeniden girildiğinde kaynak kodu baştan okumadan güncel yapıyı anlamak için tutulur. Kod tabanının 17 Ekim 2026 tarihindeki sadeleştirilmiş tasarımını açıklar.
+Bu belge projeye yeniden girildiğinde kaynak kodu baştan okumadan güncel yapıyı anlamak için tutulur. Kod tabanının 18 Ekim 2026 tarihindeki sadeleştirilmiş tasarımını açıklar.
 
 ## Tasarım ilkesi
 
@@ -19,8 +19,9 @@ Amaç en az dosya değil, bir sorgunun akışını birkaç dosya açarak baştan
 
 ```text
 İndeksleme
-PDF -> clean_text -> parse_pdf -> chunk_document
-    -> EmbeddingEncoder -> DenseVectorIndex / Qdrant
+PDF -> clean_text -> parse_pdf -> chunk_document_by_tokens
+    -> llama.cpp / all-MiniLM-L6-v2 -> HNSW Qdrant collection
+    -> atomic alias replacement
 
 Uygulama başlangıcı
 Qdrant'tan chunk'ları oku -> BM25Index kur
@@ -38,7 +39,6 @@ Rotalar:
 |---|---|
 | `cheap` | `BM25Index` |
 | `medium` | `HybridRetriever` |
-| `expensive` | `RerankedRetriever` |
 
 ## Güncel dosya ağacı
 
@@ -48,8 +48,8 @@ src/astrarag/
 ├── config.py                   Ortam ve uygulama ayarları
 ├── models.py                   Bütün Pydantic veri sözleşmeleri
 ├── documents.py                PDF temizleme, parse ve production chunking
-├── embedding.py                Yerel embedding modeli
-├── indexes.py                  Qdrant ve BM25 indeksleri
+├── embedding.py                llama.cpp HTTP embedding client'ı
+├── indexes.py                  HNSW Qdrant ve BM25 indeksleri
 ├── indexing.py                 Production corpus indeksleme fonksiyonu
 ├── retrieval.py                Production retrieval stratejileri
 ├── routing.py                  Query profiling ve rota fonksiyonları
@@ -92,18 +92,23 @@ Pydantic bilerek korunmuştur. Modeller farklı dosyalara dağılmadığı için
 
 - `clean_text(text)`: PDF artefaktlarını ve whitespace'i normalize eder.
 - `parse_pdf(path)`: PyMuPDF ile sayfaları çıkarır ve SHA-256 belge kimliği üretir.
-- `chunk_document(document, chunk_size, overlap)`: Sayfa bazlı sabit chunk üretir.
+- `chunk_document(document, chunk_size, overlap)`: Deneyler için karakter bazlı chunk üretir.
+- `chunk_document_by_tokens(...)`: Production için 254 token / 32 overlap chunk üretir.
 
 Bu işlemler kaynak veya değişebilir durum taşımadıkları için sınıf değildir.
 
 ### `embedding.py`
 
-`EmbeddingEncoder`, yerel SentenceTransformer modeline sahip olduğu için sınıftır. Model yükleme pahalıdır ve örnek yaşam döngüsü boyunca tekrar kullanılır.
+`EmbeddingEncoder`, llama.cpp'nin OpenAI uyumlu `/v1/embeddings` endpoint'ine kalıcı HTTP client ile bağlanır. Dönen matrisin adet, boyut ve sonlu sayı kontrollerini yapar; vektörleri L2 normalize eder. Torch, Transformers ve SentenceTransformers production bağımlılığı değildir.
+
+Nihai embedding modeli şimdilik `all-MiniLM-L6-v2` F16 GGUF'tur. Model ve tokenizer revision/SHA-256 değerleri ayarlarda sabittir ve Qdrant collection metadata'sına yazılır.
 
 ### `indexes.py`
 
-- `DenseVectorIndex`: Qdrant collection/client durumunu ve dense aramayı yönetir.
+- `DenseVectorIndex`: Qdrant collection/client durumunu ve HNSW ANN aramasını yönetir.
 - `BM25Index`: Tokenize corpus ve BM25 indeksini bellekte tutar.
+
+Qdrant araması `exact=False` ve açık `hnsw_ef` ile yapılır. Collection oluşturulurken `m`, `ef_construct`, full-scan ve indexing threshold değerleri açıkça verilir. Uygulama başlangıcında vector dimension ve index metadata uyumluluğu doğrulanır.
 
 Eski `BM25Retriever` kaldırılmıştır. `BM25Index` doğrudan `retrieve()` sunduğu için tek satırlık adapter'a ihtiyaç yoktur.
 
@@ -114,8 +119,8 @@ Production retrieval sınırıdır:
 - `Retriever`: `retrieve(query, top_k)` yapısal protokolü.
 - `DenseRetriever`: Query embedding + Qdrant araması.
 - `HybridRetriever`: Dense ve BM25 sonuçlarını RRF ile birleştirir.
-- `CrossEncoderReranker`: Yerel cross-encoder modelini taşır.
-- `RerankedRetriever`: Base retriever adaylarını reranker'dan geçirir.
+
+Önceki cross-encoder production yolundan kaldırılmıştır. Mevcut benchmark'ta Hybrid'den daha düşük kalite ve yaklaşık 1.2 saniye ek gecikme ürettiği, ayrıca Torch gerektirdiği için kanıtlanmadan geri eklenmemelidir.
 
 Buradaki sınıflar gerçek strateji veya ağır kaynak sahibidir. Eski `retriever()` metot adı `retrieve()` olarak sadeleştirilmiştir.
 
@@ -155,7 +160,9 @@ Pipeline, üç gerçek stratejinin aynı sözleşmeyle değiştirilebilmesi ve f
 
 ### `indexing.py`
 
-`index_directory()` production PDF'lerini parse, chunk, embed ve `astrarag-corpus` koleksiyonuna yazar. Parent-child indeks artık varsayılan indekslemenin gizli maliyeti değildir; ayrı deney scriptiyle üretilir. Qdrant client `finally` bloğunda kapatılır.
+`index_directory()` production PDF'lerini parse eder, token sınırlarına göre böler ve ayarlanabilir batch'lerle llama.cpp üzerinden embed eder. Her build yeni bir fiziksel collection'a yazılır; başarıdan sonra `astrarag-corpus` alias'ı atomik olarak yeni collection'a alınır. Böylece değiştirilmiş/silinmiş belgelerin eski chunk'ları aktif indekste kalmaz ve başarısız build mevcut indeksi bozmaz.
+
+Yerel dosya tabanlı Qdrant geliştirme/test için korunur. Docker ve production kullanımı `QDRANT_URL` ile ayrı Qdrant server'a bağlanır; bu sayede API ve indeksleme farklı process'lerde çalışabilir.
 
 ### `evaluation.py`
 
@@ -178,16 +185,14 @@ Context deneyleri stateless fonksiyon, query transformer ve retriever deneyleri 
 ```text
 AstraRAG
 ├── QdrantClient
-├── EmbeddingEncoder
+├── EmbeddingEncoder (llama.cpp HTTP)
 ├── DenseVectorIndex
 ├── BM25Index
 ├── DenseRetriever
 ├── HybridRetriever
-├── CrossEncoderReranker
-├── RerankedRetriever
 ├── GeminiGenerator
 └── RAGPipeline
-    └── {cheap, medium, expensive} -> Retriever
+    └── {cheap, medium} -> Retriever
 ```
 
 ## Scriptlerin durumu
@@ -196,7 +201,7 @@ Korunan scriptler:
 
 | Script | Amaç |
 |---|---|
-| `benchmark_retrieval.py` | Production ve parent-child stratejilerini karşılaştırır. |
+| `benchmark_retrieval.py` | Dense, BM25, Hybrid ve parent-child stratejilerini karşılaştırır. |
 | `benchmark_router.py` | Sabit stratejiler ile rule-based routing'i karşılaştırır. |
 | `benchmark_chunking.py` | Chunk boyutu/overlap ablation'ı. |
 | `benchmark_context.py` | Baseline, clustered ve MMR context benchmark'ı. |
@@ -210,10 +215,10 @@ Kaldırılan legacy dosyalar Git geçmişinden geri alınabilir: kök `main.py`,
 
 ## Test durumu
 
-Sadeleştirme sonrası:
+Güncel durumda:
 
 - Testler `test/white_box/` ve `test/black_box/` olarak ayrılmıştır.
-- Varsayılan koşuda 39 test başarılı, 4 ortam-bağımlı test skip edilir.
+- Varsayılan koşuda white-box ve black-box testler birlikte çalışır; gerçek llama.cpp indeksleme, Gemini ve tam retrieval benchmark'ı açıkça opt-in'dir.
 - Ruff lint başarılı.
 - Mypy, 22 source dosyasında başarılı.
 - Python compile kontrolü başarılı.
@@ -223,21 +228,24 @@ gerçek Uvicorn/HTTP sınırı üzerinden çalıştırır. Gerçek embedding ind
 `RUN_SLOW_TESTS=1`, Gemini servisi `RUN_LIVE_E2E=1`, retrieval kalite kapısı
 `RUN_RETRIEVAL_ACCEPTANCE=1` ile açıkça etkinleştirilir.
 
-Yeni retrieval testleri şunları korur:
+Testler ayrıca şunları korur:
 
 - `BM25Index` doğrudan retriever olarak çalışır.
 - Hybrid duplicate sonuçları doğru RRF skoru ile birleştirir.
-- Cross-encoder sonucu public `score` alanını günceller; eski `scores` kusuru geri gelemez.
+- llama.cpp embedding response boyutu ve normalizasyonu doğrulanır.
+- Token chunk'ları model limitini aşmaz ve kaynak karakter offset'lerini korur.
+- Qdrant collection HNSW ayarları ve model metadata'sıyla oluşturulur.
+- Rebuild eski belge chunk'larını aktif indeksten çıkarır.
 
 ## Kalan darboğazlar ve teknik borç
 
 ### Yüksek öncelik
 
-1. **Cross-encoder eager yükleniyor.** Expensive rota kullanılmasa bile startup süresi ve RAM maliyeti oluşuyor. Lazy loading ve kalite/latency yeniden ölçümü gerekiyor.
+1. **Yeni embedding/chunk konfigürasyonu yeniden benchmark edilmedi.** Tarihsel skorlar 1800/200 karakter chunk'larına aittir; 254/32 token production indeksi için kalite kapıları yeniden ölçülmelidir.
 2. **BM25 startup maliyeti.** Her proses bütün Qdrant chunk'larını belleğe alıp BM25'yi yeniden kuruyor.
-3. **İndeksleme tek büyük batch kullanıyor.** Corpus büyüdüğünde chunk listesi ve embedding matrisi belleği artıracak.
-4. **Stale Qdrant kayıtları.** Değişen veya silinen PDF'lerin eski chunk'ları otomatik temizlenmiyor.
-5. **Gemini dayanıklılığı.** Timeout, retry/backoff ve rate-limit politikası yok.
+3. **Gemini dayanıklılığı.** Timeout, retry/backoff ve rate-limit politikası yok.
+4. **İndeksleme gözlemlenebilirliği.** Yapılandırılmış ilerleme, süre, hata ve build kimliği logları henüz yok.
+5. **Collection temizliği.** Alias değişimi güvenli; önceki fiziksel collection silinemediğinde yalnız uyarı basılıyor. Periyodik orphan cleanup komutu yok.
 
 ### Orta öncelik
 
@@ -254,7 +262,9 @@ Yeni retrieval testleri şunları korur:
 - Pydantic modelleri katmanlar arası sözleşme olarak kalmalı.
 - Her production retriever `retrieve()` ile yüksek skor önce döndürmeli.
 - Dış skor alanı yalnız `score` olmalı.
-- Ağır model/client/index sahipleri sınıf ve açık yaşam döngüsü kullanmalı.
+- Ağır client/index sahipleri sınıf ve açık yaşam döngüsü kullanmalı.
+- Torch/SentenceTransformers production inference yoluna geri eklenmemeli; embedding llama.cpp servisi üzerinden çalışmalı.
+- Aktif Qdrant collection, embedding ve chunk metadata'sıyla uyumlu değilse uygulama başlamamalı.
 - Stateless dönüşümler gereksiz sınıfa çevrilmemeli.
 - Deneysel teknikler ölçülmeden production composition'a eklenmemeli.
 - Context citation formatı prompt içindeki `[SOURCE N]` kuralıyla eşleşmeli.

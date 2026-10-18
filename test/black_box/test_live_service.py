@@ -45,7 +45,7 @@ async def test_live_query_returns_a_valid_contract() -> None:
 
     assert isinstance(payload["answer"], str)
     assert payload["answer"].strip()
-    assert payload["route"] in {"cheap", "medium", "expensive"}
+    assert payload["route"] in {"cheap", "medium"}
 
     sources = payload["sources"]
     assert isinstance(sources, list)
@@ -55,9 +55,7 @@ async def test_live_query_returns_a_valid_contract() -> None:
         assert isinstance(source["chunk_id"], str) and source["chunk_id"]
         assert isinstance(source["document_id"], str) and source["document_id"]
         assert isinstance(source["pages"], list)
-        assert all(
-            isinstance(page, int) and page >= 1 for page in source["pages"]
-        )
+        assert all(isinstance(page, int) and page >= 1 for page in source["pages"])
 
     assert isinstance(payload["retrieval_latency_ms"], (int, float))
     assert payload["retrieval_latency_ms"] >= 0

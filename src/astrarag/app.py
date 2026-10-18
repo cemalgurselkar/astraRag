@@ -1,4 +1,10 @@
-"""Compose and expose the AstraRAG runtime."""
+"""AstraRAG çalışma bileşenlerini kurar ve tek bir uygulama arayüzü sunar.
+
+Sözlük:
+- `AstraRAG.start`: Ayarları doğrular; indeks, retriever, generator ve pipeline'ı kurar.
+- `AstraRAG.query`: Hazır pipeline üzerinde bir kullanıcı sorgusu çalıştırır.
+- `AstraRAG.close`: HTTP, Gemini ve Qdrant kaynaklarını güvenle kapatır.
+"""
 
 from typing import Self
 
@@ -7,14 +13,12 @@ from qdrant_client import QdrantClient
 from astrarag.config import Settings
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.generation import GeminiGenerator
-from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.indexes import BM25Index, DenseVectorIndex, create_qdrant_client
 from astrarag.models import PipelineResult, RetrievalRoute
 from astrarag.pipeline import RAGPipeline
 from astrarag.retrieval import (
-    CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
-    RerankedRetriever,
     Retriever,
 )
 
@@ -29,25 +33,44 @@ class AstraRAG:
         self.settings = settings or Settings()
 
         self._qdrant_client: QdrantClient | None = None
+        self._encoder: EmbeddingEncoder | None = None
         self._generator: GeminiGenerator | None = None
         self._pipeline: RAGPipeline | None = None
 
     def start(self) -> None:
         if self._pipeline is not None:
             return
+        try:
+            self._start()
+        except Exception:
+            self.close()
+            raise
+
+    def _start(self) -> None:
         if not self.settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is required to start AstraRAG")
 
-        encoder = EmbeddingEncoder(model_name=self.settings.embedding_model_path)
+        self._encoder = EmbeddingEncoder(
+            base_url=self.settings.embedding_url,
+            model=self.settings.embedding_model,
+            dimension=self.settings.embedding_dimension,
+            timeout_seconds=self.settings.embedding_timeout_seconds,
+        )
 
-        self._qdrant_client = QdrantClient(
-            path=str(self.settings.qdrant_path),
+        self._qdrant_client = create_qdrant_client(
+            url=self.settings.qdrant_url,
+            path=self.settings.qdrant_path,
+            api_key=self.settings.qdrant_api_key,
+            timeout=self.settings.qdrant_timeout_seconds,
         )
 
         dense_index = DenseVectorIndex(
             path=self.settings.qdrant_path,
             collection_name=self.settings.qdrant_collection,
-            dimension=encoder.dimension,
+            dimension=self._encoder.dimension,
+            hnsw_ef_search=self.settings.qdrant_hnsw_ef_search,
+            expected_metadata=self.settings.index_metadata,
+            validate_hnsw=self.settings.qdrant_url is not None,
             client=self._qdrant_client,
         )
 
@@ -59,8 +82,10 @@ class AstraRAG:
                 "Index documents before starting the application."
             )
 
+        self._encoder.check_health()
+
         dense = DenseRetriever(
-            encoder=encoder,
+            encoder=self._encoder,
             index=dense_index,
         )
 
@@ -72,18 +97,9 @@ class AstraRAG:
             rrf_k=self.settings.hybrid_rrf_k,
         )
 
-        reranker = CrossEncoderReranker(model_name=self.settings.reranker_model_path)
-
-        hybrid_ce = RerankedRetriever(
-            base=hybrid,
-            reranker=reranker,
-            candidate_k=self.settings.reranker_candidate_k,
-        )
-
         retrievers: dict[RetrievalRoute, Retriever] = {
             RetrievalRoute.CHEAP: bm25,
             RetrievalRoute.MEDIUM: hybrid,
-            RetrievalRoute.EXPENSIVE: hybrid_ce,
         }
 
         self._generator = GeminiGenerator(
@@ -113,6 +129,10 @@ class AstraRAG:
         if self._qdrant_client is not None:
             self._qdrant_client.close()
             self._qdrant_client = None
+
+        if self._encoder is not None:
+            self._encoder.close()
+            self._encoder = None
 
         self._pipeline = None
 

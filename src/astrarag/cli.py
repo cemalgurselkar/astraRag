@@ -1,4 +1,12 @@
-"""Provide command-line entry points for indexing, serving, and evaluation."""
+"""İndeksleme, API sunma ve değerlendirme için komut satırı arayüzü sağlar.
+
+Sözlük:
+- `build_parser`: `index`, `serve` ve `evaluate` komutlarını tanımlar.
+- `main`: Argümanları okuyup ilgili komutu çalıştırır.
+- `run_index`: PDF dizinini production koleksiyonuna indeksler.
+- `run_server`: FastAPI uygulamasını Uvicorn ile başlatır.
+- `run_evaluation`: Retrieval metriklerini veri seti üzerinde hesaplar.
+"""
 
 import argparse
 from pathlib import Path
@@ -70,9 +78,7 @@ def run_index(path: Path) -> None:
     try:
         document_count = index_directory(
             path,
-            qdrant_path=settings.qdrant_path,
-            embedding_model_path=settings.embedding_model_path,
-            collection_name=settings.qdrant_collection,
+            settings=settings,
         )
     except (
         FileNotFoundError,

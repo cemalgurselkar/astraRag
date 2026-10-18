@@ -1,4 +1,11 @@
-"""Retrieval and context strategies kept for controlled experiments."""
+"""Production dışındaki kontrollü retrieval ve context deneylerini dışa açar.
+
+Sözlük:
+- `build_clustered_context`, `build_mmr_context`: Deneysel bağlam seçicileri.
+- `chunk_parent_child`: Parent-child belge parçalama deneyi.
+- `ParentChildRetriever`, `MultiQueryRetriever`, `HyDERetriever`: Deneysel arayıcılar.
+- `GeminiQueryTransformer`: Alternatif sorgu ve varsayımsal belge üreticisi.
+"""
 
 from astrarag.experiments.context import build_clustered_context, build_mmr_context
 from astrarag.experiments.documents import chunk_parent_child

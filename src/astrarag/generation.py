@@ -1,4 +1,9 @@
-"""Grounded answer generation with Gemini."""
+"""Getirilen bağlamı kullanarak Gemini ile kaynaklandırılmış cevap üretir.
+
+Sözlük:
+- `SYSTEM_INSTRUCTION`: Modeli yalnız verilen kanıtlara bağlı tutan kurallar.
+- `GeminiGenerator`: Gemini istemcisini yönetir, cevap üretir ve kapatır.
+"""
 
 from google import genai
 from google.genai import types

@@ -40,7 +40,9 @@ def _profile() -> QueryProfile:
     )
 
 
-def _retrieval_results(specs: list[tuple[str, str, list[int]]]) -> list[RetrievalResult]:
+def _retrieval_results(
+    specs: list[tuple[str, str, list[int]]],
+) -> list[RetrievalResult]:
     return [
         RetrievalResult(
             chunk_id=chunk_id,

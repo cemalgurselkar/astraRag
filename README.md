@@ -17,7 +17,7 @@ Documents
 PDF Parser → Cleaner → Chunker
    │
    ▼
-Embedding Encoder
+llama.cpp Embedding Server
    │
    ├───────────────┐
    ▼               ▼
@@ -27,11 +27,11 @@ Qdrant          BM25 Index
            │
 Query → Profiler → Router
            │
-     ┌─────┼──────────┐
-     ▼     ▼          ▼
-   BM25  Hybrid   Hybrid + CE
-     │     │          │
-     └─────┴──────────┘
+        ┌──┴────┐
+        ▼       ▼
+      BM25    Hybrid
+        │       │
+        └───┬───┘
            ▼
      Context Engine
            │
@@ -48,11 +48,11 @@ The outer pipeline is deterministic. The LLM is used for grounded answer generat
 
 - PDF parsing and text cleaning
 - Fixed-size and parent-child chunking
-- Local sentence-transformer embeddings
-- Persistent Qdrant vector storage
+- all-MiniLM-L6-v2 embeddings served by llama.cpp without Torch
+- Versioned Qdrant collections with atomic alias replacement
+- Explicit HNSW ANN indexing and search parameters
 - Dense and BM25 retrieval
 - Hybrid retrieval with Reciprocal Rank Fusion
-- Cross-encoder reranking
 - Parent-child retrieval
 - Rule-based adaptive routing
 - Context deduplication and budgeting
@@ -60,13 +60,13 @@ The outer pipeline is deterministic. The LLM is used for grounded answer generat
 - Retrieval and context benchmarking
 - Python, CLI, REST API, and Docker interfaces
 
-Embedding and cross-encoder inference run locally. Only generation requires the external Gemini API.
+Embedding inference runs locally through llama.cpp. Only generation requires the external Gemini API.
 
 ## Experiments
 
 AstraRAG uses a 40-query development benchmark over five academic papers.
 
-The current fixed-size chunking baseline is **1800 characters / 200 overlap**, selected through a 15-configuration chunking ablation.
+The historical fixed-size baseline was **1800 characters / 200 overlap**. Production indexing now uses **254 embedding tokens / 32 overlap** so all-MiniLM-L6-v2 never silently truncates most of a chunk. Retrieval scores must be re-baselined for this production configuration.
 
 ### Retrieval Benchmark
 
@@ -143,7 +143,7 @@ Open the API documentation at:
 
 `http://localhost:8000/docs`
 
-Qdrant data is persisted under `data/qdrant/`.
+Qdrant data is persisted in the `qdrant-data` Docker volume.
 
 ## Local Installation
 
@@ -153,16 +153,23 @@ AstraRAG requires Python 3.11 and `uv`.
 uv sync
 ```
 
-Download the local models:
+Download the pinned GGUF model and tokenizer:
 
 ```bash
 mkdir -p models
 
-uv run hf download sentence-transformers/all-MiniLM-L6-v2 \
-  --local-dir models/all-MiniLM-L6-v2
+curl -fL \
+  https://huggingface.co/LLukas22/all-MiniLM-L6-v2-GGUF/resolve/ae6369f25f3393dcca54ff7b41157ffd2e43e2e6/all-minilm-l6-v2_f16.gguf \
+  -o models/all-minilm-l6-v2_f16.gguf
 
-uv run hf download cross-encoder/ms-marco-MiniLM-L-6-v2 \
-  --local-dir models/ms-marco-MiniLM-L6-v2
+mkdir -p models/all-MiniLM-L6-v2
+curl -fL \
+  https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer.json \
+  -o models/all-MiniLM-L6-v2/tokenizer.json
+
+printf '%s  %s\n' \
+  7266519c8c9b860e99d561d2cb849cf546b248eb23bcb23787be5b11180daec3 \
+  models/all-minilm-l6-v2_f16.gguf | sha256sum -c -
 ```
 
 Create `.env`:
@@ -171,7 +178,16 @@ Create `.env`:
 GEMINI_API_KEY=your_api_key
 ```
 
-Then index and run:
+Start llama.cpp in a separate terminal:
+
+```bash
+llama serve \
+  -m models/all-minilm-l6-v2_f16.gguf \
+  --embedding --pooling mean --embd-normalize 2 \
+  --host 127.0.0.1 --port 8081 --no-ui
+```
+
+Then index and run. Local file-backed Qdrant is intended for development; Docker Compose uses the Qdrant server so indexing and API processes can operate independently.
 
 ```bash
 uv run astrarag index
@@ -190,9 +206,7 @@ uv run astrarag index /path/to/pdfs
 from astrarag import AstraRAG
 
 with AstraRAG() as rag:
-    result = rag.query(
-        "What is the main idea behind Sentence-BERT?"
-    )
+    result = rag.query("What is the main idea behind Sentence-BERT?")
 
     print(result.generation.answer)
     print(result.route)
@@ -255,7 +269,7 @@ uv run pytest
 
 The test suite is split into `test/white_box` component tests and
 `test/black_box` CLI/HTTP boundary tests. Slow local-model tests require
-`RUN_SLOW_TESTS=1`; live external-service tests remain opt-in.
+`RUN_SLOW_TESTS=1` and a llama.cpp server at `EMBEDDING_URL`; live external-service tests remain opt-in.
 
 Lint:
 
@@ -265,4 +279,4 @@ uv run ruff check src test
 
 ## Tech Stack
 
-Python 3.11 · uv · PyMuPDF · sentence-transformers · Qdrant · rank-bm25 · FastAPI · Pydantic · Gemini API · pytest
+Python 3.11 · uv · PyMuPDF · llama.cpp · Qdrant · rank-bm25 · FastAPI · Pydantic · Gemini API · pytest

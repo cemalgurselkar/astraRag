@@ -16,10 +16,8 @@ from astrarag.evaluation import (
 from astrarag.indexes import BM25Index, DenseVectorIndex
 from astrarag.models import RetrievalRoute
 from astrarag.retrieval import (
-    CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
-    RerankedRetriever,
 )
 from astrarag.routing import choose_route, profile_query
 
@@ -211,14 +209,6 @@ def main() -> None:
         rrf_k=20,
     )
 
-    reranker = CrossEncoderReranker()
-
-    hybrid_ce = RerankedRetriever(
-        base=hybrid,
-        reranker=reranker,
-        candidate_k=20,
-    )
-
     queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
 
     print(f"Evaluation queries: {len(queries)}")
@@ -233,7 +223,6 @@ def main() -> None:
     adaptive_retrievers = {
         RetrievalRoute.CHEAP: bm25,
         RetrievalRoute.MEDIUM: hybrid,
-        RetrievalRoute.EXPENSIVE: hybrid_ce,
     }
 
     results = [
@@ -245,11 +234,6 @@ def main() -> None:
         evaluate_strategy(
             "Always Hybrid",
             hybrid,
-            queries,
-        ),
-        evaluate_strategy(
-            "Always Hybrid + CE",
-            hybrid_ce,
             queries,
         ),
     ]

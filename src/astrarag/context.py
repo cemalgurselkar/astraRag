@@ -1,4 +1,9 @@
-"""Build bounded generation context from retrieval results."""
+"""Arama sonuçlarından sınırlandırılmış üretim bağlamı oluşturur.
+
+Sözlük:
+- `build_context`: En ilgili, benzersiz sonuçları karakter ve adet sınırına sığdırır.
+- `_format_context`: Seçilen parçaları kaynak etiketleriyle tek bir metne dönüştürür.
+"""
 
 from collections.abc import Sequence
 

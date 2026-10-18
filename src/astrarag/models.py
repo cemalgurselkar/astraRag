@@ -1,4 +1,14 @@
-"""Pydantic data contracts shared across AstraRAG."""
+"""AstraRAG katmanları arasında kullanılan doğrulanmış veri sözleşmelerini tanımlar.
+
+Sözlük:
+- `Page`, `Document`, `Chunk`: Kaynak PDF'in sayfa, belge ve parça modelleri.
+- `RetrievalResult`: Retriever tarafından döndürülen sıralı arama sonucu.
+- `ContextItem`, `ContextPackage`: Üretim modeline gönderilecek kanıt bağlamı.
+- `GeneratedAnswer`: Model cevabı ve kullanılan kaynak kimlikleri.
+- `RetrievalRoute`, `QueryProfile`: Sorgunun özellikleri ve seçilen arama yolu.
+- `PipelineResult`: Tüm RAG çalışmasının cevabı, kaynakları ve süreleri.
+- `QueryType`, `Evidence`, `EvaluationQuery`: Değerlendirme veri seti modelleri.
+"""
 
 from enum import StrEnum
 from typing import Any
@@ -60,7 +70,6 @@ class GeneratedAnswer(BaseModel):
 class RetrievalRoute(StrEnum):
     CHEAP = "cheap"
     MEDIUM = "medium"
-    EXPENSIVE = "expensive"
 
 
 class QueryProfile(BaseModel):

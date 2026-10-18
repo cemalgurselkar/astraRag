@@ -1,17 +1,10 @@
 """Exercise the API through a real HTTP server process."""
 
-import os
 from pathlib import Path
-
-import pytest
 
 from astrarag.models import PipelineResult
 from test.black_box.fake_app import FakeRAG, app
-from test.black_box.server import (
-    EMBEDDING_MODEL,
-    request_json,
-    run_failing_server,
-)
+from test.black_box.server import request_json, run_failing_server
 
 
 def test_openapi_exposes_the_public_routes() -> None:
@@ -162,21 +155,15 @@ def test_server_fails_without_a_gemini_key(tmp_path: Path) -> None:
     assert "GEMINI_API_KEY is required to start AstraRAG" in result.stderr
 
 
-@pytest.mark.slow
-@pytest.mark.skipif(
-    os.getenv("RUN_SLOW_TESTS") != "1" or not EMBEDDING_MODEL.exists(),
-    reason="set RUN_SLOW_TESTS=1 and install the local embedding model",
-)
 def test_server_fails_with_an_empty_corpus(tmp_path: Path) -> None:
     result = run_failing_server(
         "test.black_box.bootstrap_app:app",
         environment={
             "GEMINI_API_KEY": "startup-test-dummy-key",
-            "EMBEDDING_MODEL_PATH": str(EMBEDDING_MODEL),
             "QDRANT_PATH": str(tmp_path / "qdrant"),
         },
         cwd=tmp_path,
     )
 
     assert result.returncode != 0, result.stdout
-    assert "corpus is empty" in result.stderr
+    assert "Index documents before starting" in result.stderr
