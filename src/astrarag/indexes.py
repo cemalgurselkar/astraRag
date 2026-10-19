@@ -2,7 +2,7 @@
 
 Sözlük:
 - `create_qdrant_client`: Uzak Qdrant'a veya yerel geliştirme deposuna bağlanır.
-- `DenseVectorIndex`: Chunk embedding'lerini yazar, doğrular ve ANN araması yapar.
+- `DenseVectorIndex`: Chunk'ları yazar/okur, ayarları doğrular ve ANN araması yapar.
 - `BM25Index`: Chunk metinleri üzerinde sözcük tabanlı sparse arama yapar.
 - `_tokenize`: BM25 için metni basit terimlere ayırır.
 """

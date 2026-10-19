@@ -2,7 +2,7 @@
 
 Sözlük:
 - `Settings`: Model, Qdrant, chunk, retrieval ve API ayarlarının tek kaynağı.
-- `Settings.index_metadata`: İndeksi üreten model ve HNSW yapılandırmasını özetler.
+- `Settings.index_metadata`: İndeks şeması, model, chunk ve HNSW ayarlarını kaydeder.
 """
 
 from pathlib import Path
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     @property
     def index_metadata(self) -> dict[str, object]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "embedding_model": self.embedding_model,
             "embedding_dimension": self.embedding_dimension,
             "embedding_model_revision": self.embedding_model_revision,

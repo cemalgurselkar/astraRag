@@ -3,13 +3,14 @@
 Sözlük:
 - `clean_text`: PDF çıkarımından kalan boşluk ve karakter bozukluklarını düzeltir.
 - `parse_pdf`: PDF sayfalarını doğrulanmış bir `Document` modeline dönüştürür.
+- `file_sha256`: Bir dosyanın içerik kimliğini tek geçişte hesaplar.
 - `chunk_document`: Deneyler için karakter tabanlı parçalar üretir.
 - `chunk_document_by_tokens`: Production için tokenizer tabanlı parçalar üretir.
-- `_document_id`: Dosya içeriğinden kararlı belge kimliği oluşturur.
 """
 
 import re
 import unicodedata
+from collections.abc import Mapping
 from hashlib import sha256
 from pathlib import Path
 
@@ -31,7 +32,12 @@ def clean_text(text: str) -> str:
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
-def parse_pdf(file_path: str | Path) -> Document:
+def parse_pdf(
+    file_path: str | Path,
+    *,
+    document_id: str | None = None,
+    extra_metadata: Mapping[str, object] | None = None,
+) -> Document:
     """Parse a text-based PDF into a validated document."""
     path = Path(file_path)
     if not path.exists():
@@ -51,20 +57,22 @@ def parse_pdf(file_path: str | Path) -> Document:
         raise ValueError(f"No extractable text found in PDF: {path}")
 
     return Document(
-        id=_document_id(path),
+        id=document_id or file_sha256(path),
         source=str(path),
         pages=pages,
         metadata={
             "filename": path.name,
             "page_count": page_count,
             "text_page_count": len(pages),
+            **(extra_metadata or {}),
         },
     )
 
 
-def _document_id(path: Path) -> str:
+def file_sha256(path: str | Path) -> str:
+    """Return a stable content digest without parsing the file."""
     digest = sha256()
-    with path.open("rb") as file:
+    with Path(path).open("rb") as file:
         for block in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()

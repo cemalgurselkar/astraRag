@@ -1,11 +1,11 @@
-"""İndeksleme, API sunma ve değerlendirme için komut satırı arayüzü sağlar.
+"""PDF indeksleme, API sunma ve değerlendirme girişi için CLI sağlar.
 
 Sözlük:
 - `build_parser`: `index`, `serve` ve `evaluate` komutlarını tanımlar.
 - `main`: Argümanları okuyup ilgili komutu çalıştırır.
-- `run_index`: PDF dizinini production koleksiyonuna indeksler.
+- `run_index`: PDF dizinini artımlı olarak production koleksiyonuna indeksler.
 - `run_server`: FastAPI uygulamasını Uvicorn ile başlatır.
-- `run_evaluation`: Retrieval metriklerini veri seti üzerinde hesaplar.
+- `run_evaluation`: Henüz taslak olan değerlendirme komutunun veri setini gösterir.
 """
 
 import argparse

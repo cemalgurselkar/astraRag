@@ -1,235 +1,221 @@
-"""Compare BM25, dense, hybrid, and hierarchical retrieval strategies."""
+"""Benchmark production retrieval quality and llama.cpp/Qdrant latency."""
 
 import math
-from pathlib import Path
-from statistics import mean
+from collections.abc import Sequence
+from statistics import mean, median
 from time import perf_counter
 
-from qdrant_client import QdrantClient
+import numpy as np
 
+from astrarag.config import Settings
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import (
     is_relevant_result,
     load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.experiments import ParentChildRetriever
-from astrarag.indexes import BM25Index, DenseVectorIndex
-from astrarag.retrieval import (
-    DenseRetriever,
-    HybridRetriever,
-)
+from astrarag.indexes import BM25Index, DenseVectorIndex, create_qdrant_client
+from astrarag.models import EvaluationQuery
+from astrarag.retrieval import DenseRetriever, HybridRetriever, Retriever
 
 TOP_K = 10
 
 
-def hit_at_k(
-    relevance: list[bool],
-    k: int,
-) -> float:
-    """Return 1 if at least one relevant result exists in the top-k."""
-
+def hit_at_k(relevance: list[bool], k: int) -> float:
     return float(any(relevance[:k]))
 
 
-def reciprocal_rank_from_relevance(
-    relevance: list[bool],
-) -> float:
-    """Return reciprocal rank of the first relevant result."""
-
+def reciprocal_rank(relevance: list[bool]) -> float:
     for rank, relevant in enumerate(relevance, start=1):
         if relevant:
             return 1.0 / rank
-
     return 0.0
 
 
-def ndcg_from_relevance(
-    relevance: list[bool],
-    k: int,
-) -> float:
-    """Compute nDCG@k from binary relevance labels."""
-
+def ndcg_at_k(relevance: list[bool], k: int) -> float:
     gains = relevance[:k]
-
     dcg = sum(
         1.0 / math.log2(rank + 1)
         for rank, relevant in enumerate(gains, start=1)
         if relevant
     )
-
     relevant_count = sum(relevance)
-
     if relevant_count == 0:
         return 0.0
-
     ideal_count = min(relevant_count, k)
-
     idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_count + 1))
-
     return dcg / idcg
 
 
+def latency_stats(values: Sequence[float]) -> tuple[float, float, float]:
+    return mean(values), median(values), float(np.percentile(values, 95))
+
+
 def evaluate(
-    name,
-    retriever,
-    queries,
-):
-    hit_5_scores = []
-    hit_10_scores = []
-    rr_scores = []
-    ndcg_scores = []
-    latencies = []
+    name: str,
+    retriever: Retriever,
+    queries: Sequence[EvaluationQuery],
+) -> dict[str, float | str]:
+    hit_5_scores: list[float] = []
+    hit_10_scores: list[float] = []
+    reciprocal_ranks: list[float] = []
+    ndcg_scores: list[float] = []
+    latencies: list[float] = []
 
     for query in queries:
         start = perf_counter()
-
-        results = retriever.retrieve(
-            query=query.query,
-            top_k=TOP_K,
-        )
-
-        latency_ms = (perf_counter() - start) * 1000
+        results = retriever.retrieve(query.query, top_k=TOP_K)
+        latencies.append((perf_counter() - start) * 1000)
 
         relevance = [is_relevant_result(result, query) for result in results]
+        hit_5_scores.append(hit_at_k(relevance, 5))
+        hit_10_scores.append(hit_at_k(relevance, 10))
+        reciprocal_ranks.append(reciprocal_rank(relevance))
+        ndcg_scores.append(ndcg_at_k(relevance, 10))
 
-        hit_5_scores.append(
-            hit_at_k(
-                relevance,
-                k=5,
-            )
-        )
-
-        hit_10_scores.append(
-            hit_at_k(
-                relevance,
-                k=10,
-            )
-        )
-
-        rr_scores.append(reciprocal_rank_from_relevance(relevance))
-
-        ndcg_scores.append(
-            ndcg_from_relevance(
-                relevance,
-                k=10,
-            )
-        )
-
-        latencies.append(latency_ms)
-
+    latency_mean, latency_p50, latency_p95 = latency_stats(latencies)
     return {
         "name": name,
         "hit_5": mean(hit_5_scores),
         "hit_10": mean(hit_10_scores),
-        "mrr": mean(rr_scores),
+        "mrr": mean(reciprocal_ranks),
         "ndcg_10": mean(ndcg_scores),
-        "latency_ms": mean(latencies),
+        "latency_mean": latency_mean,
+        "latency_p50": latency_p50,
+        "latency_p95": latency_p95,
+    }
+
+
+def benchmark_components(
+    queries: Sequence[EvaluationQuery],
+    encoder: EmbeddingEncoder,
+    dense_index: DenseVectorIndex,
+    bm25: BM25Index,
+) -> dict[str, tuple[float, float, float]]:
+    embedding_latencies: list[float] = []
+    qdrant_latencies: list[float] = []
+    bm25_latencies: list[float] = []
+
+    for query in queries:
+        start = perf_counter()
+        vector = encoder.encode_query(query.query)
+        embedding_latencies.append((perf_counter() - start) * 1000)
+
+        start = perf_counter()
+        dense_index.search(vector, limit=TOP_K)
+        qdrant_latencies.append((perf_counter() - start) * 1000)
+
+        start = perf_counter()
+        bm25.retrieve(query.query, top_k=TOP_K)
+        bm25_latencies.append((perf_counter() - start) * 1000)
+
+    return {
+        "llama.cpp embedding": latency_stats(embedding_latencies),
+        "Qdrant ANN search": latency_stats(qdrant_latencies),
+        "BM25 search": latency_stats(bm25_latencies),
     }
 
 
 def main() -> None:
-    encoder = EmbeddingEncoder()
-
-    qdrant_client = QdrantClient(path="data/qdrant")
-
-    dense_index = DenseVectorIndex(
-        path=Path("data/qdrant"),
-        collection_name="astrarag-corpus",
-        dimension=encoder.dimension,
-        client=qdrant_client,
+    settings = Settings()
+    encoder = EmbeddingEncoder(
+        base_url=settings.embedding_url,
+        model=settings.embedding_model,
+        dimension=settings.embedding_dimension,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
+    client = create_qdrant_client(
+        url=settings.qdrant_url,
+        path=settings.qdrant_path,
+        api_key=settings.qdrant_api_key,
+        timeout=settings.qdrant_timeout_seconds,
     )
 
-    chunks = dense_index.get_chunks()
-
-    print(f"Benchmark corpus: {len(chunks)} chunks")
-
-    dense = DenseRetriever(
-        encoder=encoder,
-        index=dense_index,
-    )
-
-    bm25 = BM25Index(chunks)
-
-    hybrid = HybridRetriever(
-        dense=dense,
-        sparse=bm25,
-    )
-
-    parent_child_index = DenseVectorIndex(
-        path=Path("data/qdrant"),
-        collection_name="astrarag-parent-child",
-        dimension=encoder.dimension,
-        client=qdrant_client,
-    )
-
-    parent_child_dense = DenseRetriever(
-        encoder=encoder,
-        index=parent_child_index,
-    )
-
-    parent_child = ParentChildRetriever(
-        child_retriever=parent_child_dense,
-        candidate_k=20,
-    )
-
-    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
-
-    print(f"Evaluation queries: {len(queries)}")
-    print("Validating evaluation ground truth...")
-
-    ground_truth = resolve_dataset_ground_truth(
-        queries=queries,
-        chunks=chunks,
-    )
-
-    print(f"Ground truth validated: {len(ground_truth)}/{len(queries)} queries")
-
-    experiments = [
-        ("Dense", dense),
-        ("BM25", bm25),
-        ("Hybrid RRF", hybrid),
-        ("Parent-Child", parent_child),
-    ]
-
-    results = [
-        evaluate(
-            name=name,
-            retriever=retriever,
-            queries=queries,
+    try:
+        encoder.check_health()
+        dense_index = DenseVectorIndex(
+            path=settings.qdrant_path,
+            collection_name=settings.qdrant_collection,
+            dimension=encoder.dimension,
+            hnsw_ef_search=settings.qdrant_hnsw_ef_search,
+            expected_metadata=settings.index_metadata,
+            validate_hnsw=settings.qdrant_url is not None,
+            client=client,
         )
-        for name, retriever in experiments
-    ]
 
-    print("\nRetrieval Benchmark")
-    print("=" * 90)
+        startup = perf_counter()
+        chunks = dense_index.get_chunks()
+        chunk_load_ms = (perf_counter() - startup) * 1000
 
-    print(
-        f"{'Strategy':<18}"
-        f"{'Hit@5':>10}"
-        f"{'Hit@10':>10}"
-        f"{'MRR':>10}"
-        f"{'nDCG@10':>12}"
-        f"{'Latency':>14}"
-    )
+        startup = perf_counter()
+        bm25 = BM25Index(chunks)
+        bm25_build_ms = (perf_counter() - startup) * 1000
 
-    print("-" * 90)
+        queries = load_evaluation_dataset(
+            settings.evaluation_path / "retrieval_v1.json"
+        )
+        ground_truth = resolve_dataset_ground_truth(queries=queries, chunks=chunks)
 
-    for result in results:
+        dense = DenseRetriever(encoder=encoder, index=dense_index)
+        hybrid = HybridRetriever(
+            dense=dense,
+            sparse=bm25,
+            rrf_k=settings.hybrid_rrf_k,
+        )
+
+        # Exclude one-time model and connection warmup from latency measurements.
+        warmup_vector = encoder.encode_query(queries[0].query)
+        dense_index.search(warmup_vector, limit=TOP_K)
+        bm25.retrieve(queries[0].query, top_k=TOP_K)
+
+        print("Production Retrieval Benchmark")
+        print("=" * 108)
         print(
-            f"{result['name']:<18}"
-            f"{result['hit_5']:>10.3f}"
-            f"{result['hit_10']:>10.3f}"
-            f"{result['mrr']:>10.3f}"
-            f"{result['ndcg_10']:>12.3f}"
-            f"{result['latency_ms']:>11.2f} ms"
+            f"Embedding model: {settings.embedding_model} via {settings.embedding_url}"
         )
+        print(
+            f"Chunking: {settings.chunk_size_tokens} tokens / "
+            f"{settings.chunk_overlap_tokens} overlap"
+        )
+        print(
+            f"Qdrant collection: {settings.qdrant_collection} "
+            f"(HNSW ef_search={settings.qdrant_hnsw_ef_search})"
+        )
+        print(f"Corpus: {len(chunks)} chunks; queries: {len(queries)}")
+        print(f"Ground truth: {len(ground_truth)}/{len(queries)} queries validated")
+        print(
+            f"Startup: chunk load {chunk_load_ms:.2f} ms; "
+            f"BM25 build {bm25_build_ms:.2f} ms"
+        )
+
+        component_results = benchmark_components(queries, encoder, dense_index, bm25)
+        print("\nComponent latency (warm, milliseconds)")
+        print(f"{'Component':<28}{'Mean':>12}{'p50':>12}{'p95':>12}")
+        for name, (average, p50, p95) in component_results.items():
+            print(f"{name:<28}{average:>12.2f}{p50:>12.2f}{p95:>12.2f}")
+
+        results = [
+            evaluate("Dense", dense, queries),
+            evaluate("BM25", bm25, queries),
+            evaluate("Hybrid RRF", hybrid, queries),
+        ]
+
+        print("\nQuality and end-to-end retrieval latency")
+        print(
+            f"{'Strategy':<18}{'Hit@5':>9}{'Hit@10':>9}{'MRR':>9}"
+            f"{'nDCG@10':>11}{'Mean':>11}{'p50':>11}{'p95':>11}"
+        )
+        for result in results:
+            print(
+                f"{result['name']:<18}{result['hit_5']:>9.3f}"
+                f"{result['hit_10']:>9.3f}{result['mrr']:>9.3f}"
+                f"{result['ndcg_10']:>11.3f}{result['latency_mean']:>8.2f} ms"
+                f"{result['latency_p50']:>8.2f} ms{result['latency_p95']:>8.2f} ms"
+            )
+    finally:
+        encoder.close()
+        client.close()
 
 
 if __name__ == "__main__":
     main()
-
-
-"""
-Aynen öyle, router genişletme işi proje sonunda yapmak daha doğru olacak. burada bi daha çok retrievel eklemeye kalkalrsak işin içinden çıkamayız. 
-"""

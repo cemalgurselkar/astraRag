@@ -17,11 +17,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def run_index(
     documents: Path,
     tmp_path: Path,
+    *,
+    embedding_url: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment.pop("GEMINI_API_KEY", None)
     environment["EMBEDDING_TOKENIZER_PATH"] = str(EMBEDDING_TOKENIZER)
     environment["QDRANT_PATH"] = str(tmp_path / "qdrant")
+    if embedding_url:
+        environment["EMBEDDING_URL"] = embedding_url
 
     return subprocess.run(
         [sys.executable, "-m", "astrarag.cli", "index", str(documents)],
@@ -89,6 +93,62 @@ def test_cli_indexes_a_small_pdf_without_a_gemini_key(tmp_path: Path) -> None:
         "AstraRAG black-box indexing test" in str(payload["text"])
         for payload in payloads
     )
+    assert all(
+        (payload.get("metadata") or {}).get("source_key") == "sample.pdf"
+        for payload in payloads
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    os.getenv("RUN_SLOW_TESTS") != "1"
+    or not EMBEDDING_MODEL.exists()
+    or not EMBEDDING_TOKENIZER.exists(),
+    reason="set RUN_SLOW_TESTS=1 and start the local embedding service",
+)
+def test_unchanged_corpus_skips_embedding_service(tmp_path: Path) -> None:
+    documents = tmp_path / "documents"
+    documents.mkdir()
+    write_pdf(documents / "sample.pdf", "Content that should only be embedded once.")
+
+    first_result = run_index(documents, tmp_path)
+    assert first_result.returncode == 0, first_result.stderr
+
+    second_result = run_index(
+        documents,
+        tmp_path,
+        embedding_url="http://127.0.0.1:1",
+    )
+
+    assert second_result.returncode == 0, second_result.stderr
+    assert "Index is already up to date" in second_result.stdout
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    os.getenv("RUN_SLOW_TESTS") != "1"
+    or not EMBEDDING_MODEL.exists()
+    or not EMBEDDING_TOKENIZER.exists(),
+    reason="set RUN_SLOW_TESTS=1 and start the local embedding service",
+)
+def test_reindex_reuses_unchanged_document_vectors(tmp_path: Path) -> None:
+    documents = tmp_path / "documents"
+    documents.mkdir()
+    write_pdf(documents / "stable.pdf", "Stable document content.")
+    changing_path = documents / "changing.pdf"
+    write_pdf(changing_path, "Original changing document content.")
+
+    first_result = run_index(documents, tmp_path)
+    assert first_result.returncode == 0, first_result.stderr
+
+    changing_path.unlink()
+    write_pdf(changing_path, "Updated changing document content.")
+    second_result = run_index(documents, tmp_path)
+
+    assert second_result.returncode == 0, second_result.stderr
+    assert "stable.pdf: reused" in second_result.stdout
+    assert "changing.pdf: embedded" in second_result.stdout
+    assert "1 reused, 1 embedded" in second_result.stdout
 
 
 @pytest.mark.slow

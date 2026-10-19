@@ -160,7 +160,9 @@ Pipeline, üç gerçek stratejinin aynı sözleşmeyle değiştirilebilmesi ve f
 
 ### `indexing.py`
 
-`index_directory()` production PDF'lerini parse eder, token sınırlarına göre böler ve ayarlanabilir batch'lerle llama.cpp üzerinden embed eder. Her build yeni bir fiziksel collection'a yazılır; başarıdan sonra `astrarag-corpus` alias'ı atomik olarak yeni collection'a alınır. Böylece değiştirilmiş/silinmiş belgelerin eski chunk'ları aktif indekste kalmaz ve başarısız build mevcut indeksi bozmaz.
+`index_directory()` dosyaları göreli yol, boyut ve `mtime` ile karşılaştırır; yalnız metadata değiştiğinde SHA-256 içeriğini yeniden hesaplar. Corpus tamamen aynıysa PDF parser ve llama.cpp hiç başlatılmaz. Kısmi değişiklikte eski collection'daki değişmeyen vektörler yeniden kullanılır; yalnız yeni veya içeriği değişmiş PDF'ler parse edilip token sınırlarına göre bölünür ve batch'lerle embed edilir.
+
+Her değişiklik yine yeni bir fiziksel collection'a yazılır; başarıdan sonra `astrarag-corpus` alias'ı atomik olarak yeni collection'a alınır. Silinen belgeler yeni collection'a kopyalanmaz, başarısız build mevcut indeksi bozmaz. İndeks şema/model/chunk ayarları uyumsuzsa güvenli bir tam rebuild yapılır. Beş PDF ve 314 chunk içeren mevcut örnek corpus'ta aynı makinedeki tekrar indeksleme 12,42 saniyeden 1,22 saniyeye düşmüştür; mutlak süre donanıma bağlıdır.
 
 Yerel dosya tabanlı Qdrant geliştirme/test için korunur. Docker ve production kullanımı `QDRANT_URL` ile ayrı Qdrant server'a bağlanır; bu sayede API ve indeksleme farklı process'lerde çalışabilir.
 
@@ -201,7 +203,7 @@ Korunan scriptler:
 
 | Script | Amaç |
 |---|---|
-| `benchmark_retrieval.py` | Dense, BM25, Hybrid ve parent-child stratejilerini karşılaştırır. |
+| `benchmark_retrieval.py` | Production Dense, BM25 ve Hybrid kalitesiyle llama.cpp/Qdrant p50-p95 gecikmesini ölçer. |
 | `benchmark_router.py` | Sabit stratejiler ile rule-based routing'i karşılaştırır. |
 | `benchmark_chunking.py` | Chunk boyutu/overlap ablation'ı. |
 | `benchmark_context.py` | Baseline, clustered ve MMR context benchmark'ı. |
@@ -236,15 +238,17 @@ Testler ayrıca şunları korur:
 - Token chunk'ları model limitini aşmaz ve kaynak karakter offset'lerini korur.
 - Qdrant collection HNSW ayarları ve model metadata'sıyla oluşturulur.
 - Rebuild eski belge chunk'larını aktif indeksten çıkarır.
+- Değişmeyen corpus embedding servisi kapalıyken yeniden indekslenebilir.
+- Kısmi rebuild değişmeyen belge vektörlerini koruyup yalnız değişen PDF'yi embed eder.
 
 ## Kalan darboğazlar ve teknik borç
 
 ### Yüksek öncelik
 
-1. **Yeni embedding/chunk konfigürasyonu yeniden benchmark edilmedi.** Tarihsel skorlar 1800/200 karakter chunk'larına aittir; 254/32 token production indeksi için kalite kapıları yeniden ölçülmelidir.
+1. **Production retrieval kalitesi.** Güncel 254/32 token + llama.cpp baseline'ında BM25, sabit Hybrid stratejiden daha başarılıdır. 254/64 ablation'ı BM25 Hit@5'i 0.700'den 0.750'ye çıkarırken chunk sayısını %11 artırmıştır; production değişikliği yapılmadan önce bu maliyet değerlendirilmelidir.
 2. **BM25 startup maliyeti.** Her proses bütün Qdrant chunk'larını belleğe alıp BM25'yi yeniden kuruyor.
 3. **Gemini dayanıklılığı.** Timeout, retry/backoff ve rate-limit politikası yok.
-4. **İndeksleme gözlemlenebilirliği.** Yapılandırılmış ilerleme, süre, hata ve build kimliği logları henüz yok.
+4. **İndeksleme gözlemlenebilirliği.** Artımlı indeksleme belge/chunk sayılarını bildiriyor; yapılandırılmış süre, hata ve build kimliği logları henüz yok.
 5. **Collection temizliği.** Alias değişimi güvenli; önceki fiziksel collection silinemediğinde yalnız uyarı basılıyor. Periyodik orphan cleanup komutu yok.
 
 ### Orta öncelik

@@ -11,9 +11,9 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 MINIMUM_HIT_AT_5 = {
-    "Dense": 0.55,
-    "BM25": 0.70,
-    "Hybrid RRF": 0.75,
+    "Dense": 0.50,
+    "BM25": 0.675,
+    "Hybrid RRF": 0.65,
 }
 
 

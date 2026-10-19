@@ -6,15 +6,14 @@ from pathlib import Path
 from statistics import mean
 from time import perf_counter
 
-from qdrant_client import QdrantClient
-
+from astrarag.config import Settings
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import (
     is_relevant_result,
     load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.indexes import BM25Index, DenseVectorIndex, create_qdrant_client
 from astrarag.models import RetrievalResult
 from astrarag.retrieval import DenseRetriever, HybridRetriever
 
@@ -162,9 +161,15 @@ def evaluate(
 
 
 def main() -> None:
-    encoder = EmbeddingEncoder()
+    settings = Settings()
+    encoder = EmbeddingEncoder(
+        base_url=settings.embedding_url,
+        model=settings.embedding_model,
+        dimension=settings.embedding_dimension,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
 
-    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
+    queries = load_evaluation_dataset(settings.evaluation_path / "retrieval_v1.json")
 
     transformations_data = json.loads(TRANSFORMATIONS_PATH.read_text(encoding="utf-8"))
 
@@ -173,13 +178,22 @@ def main() -> None:
     if len(transformations) != len(queries):
         raise RuntimeError("Transformation cache does not match evaluation dataset.")
 
-    client = QdrantClient(path="data/qdrant")
+    client = create_qdrant_client(
+        url=settings.qdrant_url,
+        path=settings.qdrant_path,
+        api_key=settings.qdrant_api_key,
+        timeout=settings.qdrant_timeout_seconds,
+    )
 
     try:
+        encoder.check_health()
         dense_index = DenseVectorIndex(
-            path=Path("data/qdrant"),
-            collection_name="astrarag-corpus",
+            path=settings.qdrant_path,
+            collection_name=settings.qdrant_collection,
             dimension=encoder.dimension,
+            hnsw_ef_search=settings.qdrant_hnsw_ef_search,
+            expected_metadata=settings.index_metadata,
+            validate_hnsw=settings.qdrant_url is not None,
             client=client,
         )
 
@@ -203,6 +217,7 @@ def main() -> None:
         hybrid = HybridRetriever(
             dense=dense,
             sparse=bm25,
+            rrf_k=settings.hybrid_rrf_k,
         )
 
         def dense_baseline(query):
@@ -341,6 +356,7 @@ def main() -> None:
         print("(Transformation latency is NOT included in retrieval latency above.)")
 
     finally:
+        encoder.close()
         client.close()
 
 

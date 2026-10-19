@@ -2,18 +2,17 @@
 
 import re
 from functools import partial
-from pathlib import Path
 from statistics import mean
 from time import perf_counter
 
 import numpy as np
-from qdrant_client import QdrantClient
 
+from astrarag.config import Settings
 from astrarag.context import build_context
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import load_evaluation_dataset
 from astrarag.experiments import build_clustered_context, build_mmr_context
-from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.indexes import BM25Index, DenseVectorIndex, create_qdrant_client
 
 TOP_N = 20
 MAX_CHAR = 12_000
@@ -190,15 +189,29 @@ def evaluate_context(
 
 
 def main() -> None:
-    encoder = EmbeddingEncoder()
-
-    qdrant_client = QdrantClient(path="data/qdrant")
+    settings = Settings()
+    encoder = EmbeddingEncoder(
+        base_url=settings.embedding_url,
+        model=settings.embedding_model,
+        dimension=settings.embedding_dimension,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
+    qdrant_client = create_qdrant_client(
+        url=settings.qdrant_url,
+        path=settings.qdrant_path,
+        api_key=settings.qdrant_api_key,
+        timeout=settings.qdrant_timeout_seconds,
+    )
 
     try:
+        encoder.check_health()
         dense_index = DenseVectorIndex(
-            path=Path("data/qdrant"),
-            collection_name="astrarag-corpus",
+            path=settings.qdrant_path,
+            collection_name=settings.qdrant_collection,
             dimension=encoder.dimension,
+            hnsw_ef_search=settings.qdrant_hnsw_ef_search,
+            expected_metadata=settings.index_metadata,
+            validate_hnsw=settings.qdrant_url is not None,
             client=qdrant_client,
         )
 
@@ -208,7 +221,9 @@ def main() -> None:
 
         bm25 = BM25Index(chunks)
 
-        queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
+        queries = load_evaluation_dataset(
+            settings.evaluation_path / "retrieval_v1.json"
+        )
 
         print(f"Evaluation queries: {len(queries)}")
 
@@ -320,6 +335,7 @@ def main() -> None:
             )
 
     finally:
+        encoder.close()
         qdrant_client.close()
 
 

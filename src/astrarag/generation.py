@@ -2,11 +2,13 @@
 
 Sözlük:
 - `SYSTEM_INSTRUCTION`: Modeli yalnız verilen kanıtlara bağlı tutan kurallar.
-- `GeminiGenerator`: Gemini istemcisini yönetir, cevap üretir ve kapatır.
+- `GeminiGenerator`: Gemini istemcisini, geçici hata tekrarlarını ve cevabı yönetir.
 """
 
+from time import sleep
+
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from astrarag.models import ContextPackage, GeneratedAnswer
 
@@ -45,14 +47,32 @@ class GeminiGenerator:
             )
 
         prompt = f"Retrieved context:\n\n{context.text}\n\nQuestion:\n{query.strip()}"
-        response = self._client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.0,
-            ),
-        )
+        response = None
+        for attempt in range(3):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.0,
+                        automatic_function_calling=(
+                            types.AutomaticFunctionCallingConfig(disable=True)
+                        ),
+                    ),
+                )
+                break
+            except errors.ServerError as exc:
+                if attempt == 2:
+                    raise RuntimeError(
+                        f"Gemini is temporarily unavailable after 3 attempts: {exc}"
+                    ) from exc
+                sleep(2**attempt)
+            except errors.APIError as exc:
+                raise RuntimeError(f"Gemini request failed: {exc}") from exc
+
+        if response is None:
+            raise RuntimeError("Gemini returned no response")
         if not response.text or not response.text.strip():
             raise RuntimeError("Gemini returned an empty response")
 

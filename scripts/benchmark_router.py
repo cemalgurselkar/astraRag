@@ -1,19 +1,17 @@
 """Compare fixed retrieval strategies with adaptive rule-based query routing."""
 
 from collections import Counter
-from pathlib import Path
 from statistics import mean
 from time import perf_counter
 
-from qdrant_client import QdrantClient
-
+from astrarag.config import Settings
 from astrarag.embedding import EmbeddingEncoder
 from astrarag.evaluation import (
     is_relevant_result,
     load_evaluation_dataset,
     resolve_dataset_ground_truth,
 )
-from astrarag.indexes import BM25Index, DenseVectorIndex
+from astrarag.indexes import BM25Index, DenseVectorIndex, create_qdrant_client
 from astrarag.models import RetrievalRoute
 from astrarag.retrieval import (
     DenseRetriever,
@@ -181,83 +179,87 @@ def print_results(
 def main() -> None:
     print("Loading models and indexes...")
 
-    encoder = EmbeddingEncoder()
-
-    qdrant_client = QdrantClient(path="data/qdrant")
-
-    dense_index = DenseVectorIndex(
-        path=Path("data/qdrant"),
-        collection_name="astrarag-corpus",
-        dimension=encoder.dimension,
-        client=qdrant_client,
+    settings = Settings()
+    encoder = EmbeddingEncoder(
+        base_url=settings.embedding_url,
+        model=settings.embedding_model,
+        dimension=settings.embedding_dimension,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
+    qdrant_client = create_qdrant_client(
+        url=settings.qdrant_url,
+        path=settings.qdrant_path,
+        api_key=settings.qdrant_api_key,
+        timeout=settings.qdrant_timeout_seconds,
     )
 
-    chunks = dense_index.get_chunks()
+    try:
+        encoder.check_health()
+        dense_index = DenseVectorIndex(
+            path=settings.qdrant_path,
+            collection_name=settings.qdrant_collection,
+            dimension=encoder.dimension,
+            hnsw_ef_search=settings.qdrant_hnsw_ef_search,
+            expected_metadata=settings.index_metadata,
+            validate_hnsw=settings.qdrant_url is not None,
+            client=qdrant_client,
+        )
 
-    print(f"Benchmark corpus: {len(chunks)} chunks")
+        chunks = dense_index.get_chunks()
+        print(f"Benchmark corpus: {len(chunks)} chunks")
 
-    dense = DenseRetriever(
-        encoder=encoder,
-        index=dense_index,
-    )
+        dense = DenseRetriever(encoder=encoder, index=dense_index)
+        bm25 = BM25Index(chunks)
+        hybrid = HybridRetriever(
+            dense=dense,
+            sparse=bm25,
+            rrf_k=settings.hybrid_rrf_k,
+        )
 
-    bm25 = BM25Index(chunks)
+        queries = load_evaluation_dataset(
+            settings.evaluation_path / "retrieval_v1.json"
+        )
+        print(f"Evaluation queries: {len(queries)}")
 
-    hybrid = HybridRetriever(
-        dense=dense,
-        sparse=bm25,
-        rrf_k=20,
-    )
+        ground_truth = resolve_dataset_ground_truth(queries, chunks)
+        print(f"Ground truth validated: {len(ground_truth)}/{len(queries)}")
+        print(
+            f"Embedding: {settings.embedding_model} via {settings.embedding_url}; "
+            f"chunking: {settings.chunk_size_tokens}/{settings.chunk_overlap_tokens} tokens"
+        )
 
-    queries = load_evaluation_dataset(Path("data/eval/retrieval_v1.json"))
+        # Warm llama.cpp and Qdrant before comparing routing strategies.
+        dense.retrieve(queries[0].query, top_k=TOP_K)
 
-    print(f"Evaluation queries: {len(queries)}")
+        adaptive_retrievers = {
+            RetrievalRoute.CHEAP: bm25,
+            RetrievalRoute.MEDIUM: hybrid,
+        }
+        results = [
+            evaluate_strategy("Always BM25", bm25, queries),
+            evaluate_strategy("Always Hybrid", hybrid, queries),
+        ]
 
-    ground_truth = resolve_dataset_ground_truth(
-        queries,
-        chunks,
-    )
+        adaptive_result, route_counts = evaluate_adaptive(
+            queries=queries,
+            retrievers=adaptive_retrievers,
+        )
+        results.append(adaptive_result)
 
-    print(f"Ground truth validated: {len(ground_truth)}/{len(queries)}")
+        print_results(results)
 
-    adaptive_retrievers = {
-        RetrievalRoute.CHEAP: bm25,
-        RetrievalRoute.MEDIUM: hybrid,
-    }
+        print("\nAdaptive route distribution:")
 
-    results = [
-        evaluate_strategy(
-            "Always BM25",
-            bm25,
-            queries,
-        ),
-        evaluate_strategy(
-            "Always Hybrid",
-            hybrid,
-            queries,
-        ),
-    ]
+        total_queries = len(queries)
 
-    adaptive_result, route_counts = evaluate_adaptive(
-        queries=queries,
-        retrievers=adaptive_retrievers,
-    )
+        for route in RetrievalRoute:
+            count = route_counts[route]
+            percentage = count / total_queries * 100 if total_queries else 0.0
 
-    results.append(adaptive_result)
-
-    print_results(results)
-
-    print("\nAdaptive route distribution:")
-
-    total_queries = len(queries)
-
-    for route in RetrievalRoute:
-        count = route_counts[route]
-        percentage = count / total_queries * 100 if total_queries else 0.0
-
-        print(f"{route.value:<10}{count:>4} ({percentage:>5.1f}%)")
-
-    qdrant_client.close()
+            print(f"{route.value:<10}{count:>4} ({percentage:>5.1f}%)")
+    finally:
+        encoder.close()
+        qdrant_client.close()
 
 
 if __name__ == "__main__":
